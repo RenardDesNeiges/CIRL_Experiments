@@ -1,19 +1,48 @@
 import numpy as np
 from typing import List, Tuple
+from .mdp import MarkovDecisionProcess
 
 Point = Tuple[int,int]
 Goal = Tuple[Point,float]
 # TODO define a general MDP super class (abstract)
 # TODO define relevant visualization functions
 
-class Gridworld():
+
+class MarkovDecisionProcess():
+    def __init__(self,
+            n  :int, 
+            m :int, 
+            gamma :float, 
+            P_sa : np.ndarray,
+            R : np.ndarray,
+            ) -> None:
+        self.n : int = n
+        self.m : int = m
+        self.gamma : float = gamma
+        self.P_sa : np.ndarray = P_sa
+        self.R : np.ndarray = R
+
+    def next_state_distribution(self, s:int, a:int)->np.ndarray:
+        """Given a fixed state-action pair, gives the distribution on the next state.
+
+        Args:
+            s (int): current state s
+            a (int): action a
+
+        Returns:
+            np.ndarray: n-sized array containing the distribution of the random variable s'
+        """
+        return self.P_sa[s,a,:]
+
+
+class Gridworld(MarkovDecisionProcess):
     """Defines a Gridworld MDP
     """
     def __init__(self,
                 grid_width  :int = 3, 
                 grid_height :int = 3, 
                 noise       :float = 0.1, 
-                gamma       :float = 0.1, 
+                gamma       :float = 0.9, 
                 goals       :List[Goal] = [((0,0),2.0)] # reward of 2 in point (0,0)
                 ) -> None:
         
@@ -22,20 +51,21 @@ class Gridworld():
         self.grid_width : int = grid_width
         self.grid_height : int = grid_height
         self.noise : float = noise
-        self.gamma : float = gamma
         self.n : int = grid_width*grid_height
         self.m : int = len(self.actions)
-        self.goals:List[Goal] = goals
+        self.goals : List[Goal] = goals
         
-        self.P_sa : np.ndarray = np.array(  [[[self._transition_dynamics(s,a,sp) 
+        P_sa : np.ndarray = np.array(  [[[self._transition_dynamics(s,a,sp) 
                                             for s  in range(self.n)             ] 
                                             for a  in range(self.m)             ] 
                                             for sp in range(self.n)             ],dtype=np.float64)
         
-        self.R : np.ndarray = np.array(  [[self._reward(s,a)
-                                            for s  in range(self.n)             ] 
-                                            for a  in range(self.m)             ],dtype=np.float64)
-    
+        R : np.ndarray = np.array(  [[self._reward(s,a)
+                                            for a  in range(self.m)             ] 
+                                            for s  in range(self.n)             ],dtype=np.float64)
+        
+        super().__init__(self.n,self.m,gamma,P_sa,R)
+        
     def neighbouring(self, p1: Point, p2: Point) -> bool:
         """Is p1 a neighbor to p2?
 
@@ -169,18 +199,6 @@ class Gridworld():
             if g==p:
                 return r
         return 0.0
-    
-    def next_state_distribution(self, s:int, a:int)->np.ndarray:
-        """Given a fixed state-action pair, gives the distribution on the next state.
-
-        Args:
-            s (int): current state s
-            a (int): action a
-
-        Returns:
-            np.ndarray: n-sized array containing the distribution of the random variable s'
-        """
-        return self.P_sa[s,a,:]
     
     def states2grid(self,states:np.ndarray)->np.ndarray:
         """Converts a state vector (n) into the grid world (width x height)
