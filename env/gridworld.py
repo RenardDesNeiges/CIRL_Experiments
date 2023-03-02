@@ -27,7 +27,7 @@ class Gridworld():
         self.m : int = len(self.actions)
         self.goals:List[Goal] = goals
         
-        self.P_sa : np.ndarray = np.array(  [[[self._transition_dynamics(s,a,sp)
+        self.P_sa : np.ndarray = np.array(  [[[self._transition_dynamics(s,a,sp) 
                                             for s  in range(self.n)             ] 
                                             for a  in range(self.m)             ] 
                                             for sp in range(self.n)             ],dtype=np.float64)
@@ -98,21 +98,21 @@ class Gridworld():
             return True
         return False
     
-    def is_off_grid(self,p:Point,act:Point)->bool:
-        """Returns True if the move act from pos p brings the agent off-grid
+    def is_on_grid(self,p:Point,act:Point)->bool:
+        """Returns False if the move act from pos p brings the agent off-grid
 
         Args:
             p (Point): the agent's position
             act (Point): the specified move
 
         Returns:
-            bool: is_off_grid(p,act)
+            bool: is_on_grid(p,act)
         """
-        return (p[0] + act[0])<0 or (p[0] + act[0])>self.grid_width-1 \
-            or (p[1] + act[1])<0 or (p[1] + act[1])>self.grid_height-1
+        return (0 <= p[0] + act[0] < self.grid_width and
+                0 <= p[1] + act[1] < self.grid_height)
     
     def grid_move(self, p:Point, act:Point)->Point:
-        """Returns the point resulting when moving from p under action act
+        """Returns the arrival point when moving from p under action act
 
         Args:
             p (Point): the agent's position
@@ -121,7 +121,7 @@ class Gridworld():
         Returns:
             Point: the agent's next position
         """
-        return (p[0]+act[0],p[1]+act[1])
+        return (p[0]-act[0],p[1]-act[1])
     
     def _transition_dynamics(self, s:int, a:int, sp:int) -> float:
         """Returns the markov transition probability P(sp|s,a)
@@ -148,24 +148,51 @@ class Gridworld():
         
         # If s==sp case (implicitely specified)
         if self.is_corner(p):
-            if self.is_off_grid(p,act):
-                    return 1 - self.noise + self.noise*1/self.m
-            else:
-                return self.noise * 1/self.m
-        elif self.is_edge(p):
-            if self.is_off_grid(p,act):
-                    return 1 - self.noise + self.noise*2/self.m
-            else:
+            if self.is_on_grid(p,act):
                 return self.noise * 2/self.m
+            else:
+                return 1 - self.noise + self.noise*2/self.m
+        elif self.is_edge(p):
+            if self.is_on_grid(p,act):
+                return self.noise * 1/self.m
+            else:
+                return 1 - self.noise + self.noise*1/self.m
         else: # when not on the grid border, s==sp is a 0 probaility event
             return 0.0
         
     def _reward(self, s:int, a:int)->float:
         p = self.state2point(s)
         act = self.actions[a]
-        if self.is_off_grid(p,act):
+        if not self.is_on_grid(p,act):
             return -1.0
         for g, r in self.goals:
             if g==p:
                 return r
         return 0.0
+    
+    def next_state_distribution(self, s:int, a:int)->np.ndarray:
+        """Given a fixed state-action pair, gives the distribution on the next state.
+
+        Args:
+            s (int): current state s
+            a (int): action a
+
+        Returns:
+            np.ndarray: n-sized array containing the distribution of the random variable s'
+        """
+        return self.P_sa[s,a,:]
+    
+    def states2grid(self,states:np.ndarray)->np.ndarray:
+        """Converts a state vector (n) into the grid world (width x height)
+        usefull for plotting
+
+        Args:
+            states (np.ndarray): the state vector (usually a distribution, or the value)
+
+        Returns:
+            np.ndarray: the grid shaped representation 
+        """
+        grid : np.ndarray = np.array([[
+                    states[self.point2state((x,y))] for x in range(self.grid_width)]  
+                                                    for y in range(self.grid_height)], dtype=np.float64)
+        return grid
