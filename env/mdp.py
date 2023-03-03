@@ -25,3 +25,20 @@ class MarkovDecisionProcess():
             np.ndarray: n-sized array containing the distribution of the random variable s'
         """
         return self.P_sa[s,a,:]
+    
+    def optimality_operator(self, V:np.ndarray)->np.ndarray:
+        """Bellman optimality operator
+
+        Args:
+            V (np.ndarray): value function
+
+        Returns:
+            np.ndarray: updated value function
+        """
+        T = self.R + self.gamma * np.einsum('ijk,k',self.P_sa,V)
+        return np.max(T,1)
+    
+    def expectation_operator(self, pi:np.ndarray, V:np.ndarray)->np.ndarray:
+        R_pi = np.array([self.R[i,p] for i, p in enumerate(pi)])
+        P_s = np.array([self.P_sa[i,p,:] for i, p in enumerate(pi)])
+        return R_pi + self.gamma * P_s @ V
