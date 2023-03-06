@@ -42,8 +42,9 @@ class DualLP():
         A_eq = (E_t-self.MDP.gamma * P_t) 
         b_eq = (1-self.MDP.gamma) * self.MDP.init_distrib
         r = rearrange(self.MDP.R, 's a -> (a s)')
+        lb = np.zeros_like(r)
         res = opt.linprog(-r, # negative since we want to maximize
-                          A_eq=A_eq, b_eq=b_eq)
+                          A_eq=A_eq, b_eq=b_eq,bounds=(0,None))
         self.mu_opt = np.array([[res.x[a*self.MDP.n+s]
                                 for a in range(self.MDP.m)]
                                 for s in range(self.MDP.n)],dtype=np.float64)
