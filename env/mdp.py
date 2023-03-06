@@ -7,12 +7,14 @@ class MarkovDecisionProcess():
             gamma :float, 
             P_sa : np.ndarray,
             R : np.ndarray,
+            init_distrib : np.ndarray,
             ) -> None:
         self.n : int = n
         self.m : int = m
         self.gamma : float = gamma
         self.P_sa : np.ndarray = P_sa
         self.R : np.ndarray = R
+        self.init_distrib : np.ndarray = init_distrib
 
     def next_state_distribution(self, s:int, a:int)->np.ndarray:
         """Given a fixed state-action pair, gives the distribution on the next state.

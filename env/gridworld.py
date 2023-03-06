@@ -4,7 +4,7 @@ from .mdp import MarkovDecisionProcess
 
 Point = Tuple[int,int]
 Goal = Tuple[Point,float]
-# TODO define a general MDP super class (abstract)
+
 # TODO define relevant visualization functions
 
 class Gridworld(MarkovDecisionProcess):
@@ -36,7 +36,9 @@ class Gridworld(MarkovDecisionProcess):
                                             for a  in range(self.m)             ] 
                                             for s  in range(self.n)             ],dtype=np.float64)
         
-        super().__init__(self.n,self.m,gamma,P_sa,R)
+        init_distrib = np.zeros((self.n),dtype=np.float64); init_distrib[0] = 1. # TODO : allow for passing another distribution as an argument
+        
+        super().__init__(self.n,self.m,gamma,P_sa,R, init_distrib=init_distrib)
         
     def neighbouring(self, p1: Point, p2: Point) -> bool:
         """Is p1 a neighbor to p2?
