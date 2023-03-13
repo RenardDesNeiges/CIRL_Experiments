@@ -1,4 +1,24 @@
 import numpy as np
+from numpy import random as rd
+
+class Sampler():
+    def __init__(self, MDP) -> None:
+        self.MDP : MarkovDecisionProcess = MDP
+        self.s_t :int = None
+        
+    def reset(self, s_0: int = None):
+        if not s_0:
+            self.s_t = rd.choice(np.arange(self.MDP.n),
+                                 p = self.MDP.init_distrib)
+        else: 
+            self.s_t = s_0
+        return self.s_t # sets the initial state to 
+    
+    def step(self, action:int):
+        reward = self.MDP.R[self.s_t,action]
+        self.s_t = rd.choice(np.arange(self.MDP.n),
+                             p = self.MDP.P_sa[self.s_t,action,:]) 
+        return self.s_t, reward
 
 class MarkovDecisionProcess():
     def __init__(self,

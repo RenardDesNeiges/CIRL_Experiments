@@ -1,5 +1,4 @@
 import numpy as np
-import scipy.optimize as opt
 
 from env.mdp import MarkovDecisionProcess
 
