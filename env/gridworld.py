@@ -1,11 +1,15 @@
 import numpy as np
 from typing import List, Tuple
 from .mdp import MarkovDecisionProcess
+import matplotlib
+from matplotlib.patches import Rectangle
 
 Point = Tuple[int,int]
 Goal = Tuple[Point,float]
 
-# TODO define relevant visualization functions
+
+cmap = matplotlib.cm.get_cmap('Spectral')
+
 
 class Gridworld(MarkovDecisionProcess):
     """Defines a Gridworld MDP
@@ -15,7 +19,8 @@ class Gridworld(MarkovDecisionProcess):
                 grid_height :int = 3, 
                 noise       :float = 0.1, 
                 gamma       :float = 0.9, 
-                goals       :List[Goal] = [((0,0),2.0)] # reward of 2 in point (0,0)
+                goals       :List[Goal] = [((0,0),2.0)], # reward of 2 in point (0,0)
+                obstacles   :List[Point] = [(2,2)] # forbidden to go here
                 ) -> None:
         
         
@@ -38,7 +43,18 @@ class Gridworld(MarkovDecisionProcess):
         
         init_distrib = np.zeros((self.n),dtype=np.float64); init_distrib[0] = 1. # TODO : allow for passing another distribution as an argument
         
-        super().__init__(self.n,self.m,gamma,P_sa,R, init_distrib=init_distrib)
+        b  : np.ndarray = np.ones((len(obstacles)))*0.5
+        Psi : np.ndarray = np.array(  [[[self._cost_matrix(s,a,obs) 
+                                            for s  in range(self.n)             ] 
+                                            for a  in range(self.m)             ] 
+                                            for obs in obstacles                ],dtype=np.float64)
+        
+        super().__init__(self.n,self.m,gamma,P_sa,R, init_distrib=init_distrib,b=b,Psi=Psi)
+        
+    def _cost_matrix(self, s,a,obs):
+        if self.point2state(obs) == s:
+            return 2
+        return 0 
         
     def neighbouring(self, p1: Point, p2: Point) -> bool:
         """Is p1 a neighbor to p2?
@@ -188,3 +204,30 @@ class Gridworld(MarkovDecisionProcess):
                     states[self.point2state((x,y))] for x in range(self.grid_width)]  
                                                     for y in range(self.grid_height)], dtype=np.float64)
         return grid
+    
+
+def gridplot(gridworld:Gridworld, ax, scalar=None, policy = None, 
+             stochastic_policy=None, obstacles=None, goals=None):
+    ax.set_xlim([0,gridworld.grid_width])
+    ax.set_ylim([0,gridworld.grid_height])
+    if scalar is not None:
+        for s, value in enumerate(scalar):
+            ax.add_patch(Rectangle(gridworld.state2point(s),1,1,facecolor=cmap((value-np.min(scalar))/(np.max(scalar)-np.min(scalar)))))
+    if policy is not None:
+        for s, value in enumerate(policy):
+            point = np.array(gridworld.state2point(s)) + 0.5
+            arrow = np.array(gridworld.actions[value])*0.3
+            ax.arrow(point[0],point[1],arrow[0],arrow[1],head_width=0.1,color='k')
+    if stochastic_policy is not None:
+        for s, value in enumerate(stochastic_policy):
+            point = np.array(gridworld.state2point(s)) + 0.5
+            for a, prob in enumerate(value):
+                arrow = np.array(gridworld.actions[a])*0.3*prob
+                if prob > 1e-5:
+                    ax.arrow(point[0],point[1],arrow[0],arrow[1],head_width=0.1,color='k')
+    if obstacles is not None:
+        for value in obstacles:
+            ax.add_patch(Rectangle(value,1,1,edgecolor="r",facecolor='none',hatch='//'))
+    if goals is not None:
+        for value in goals:
+            ax.add_patch(Rectangle(value[0],1,1,edgecolor="g",facecolor='none',hatch='//'))

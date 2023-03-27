@@ -28,6 +28,8 @@ class MarkovDecisionProcess():
             P_sa : np.ndarray,
             R : np.ndarray,
             init_distrib : np.ndarray,
+            b : np.ndarray = None,
+            Psi : np.ndarray = None,
             ) -> None:
         self.n : int = n
         self.m : int = m
@@ -35,6 +37,8 @@ class MarkovDecisionProcess():
         self.P_sa : np.ndarray = P_sa
         self.R : np.ndarray = R
         self.init_distrib : np.ndarray = init_distrib
+        self.b = b
+        self.Psi = Psi
 
     def next_state_distribution(self, s:int, a:int)->np.ndarray:
         """Given a fixed state-action pair, gives the distribution on the next state.
@@ -50,7 +54,8 @@ class MarkovDecisionProcess():
     
     def optimality_operator(self, V:np.ndarray)->np.ndarray:
         """Bellman optimality operator
-
+        Note that this operator has no meaning when the MDP is constrained
+        
         Args:
             V (np.ndarray): value function
 
@@ -61,6 +66,8 @@ class MarkovDecisionProcess():
         return np.max(T,1)
     
     def expectation_operator(self, pi:np.ndarray, V:np.ndarray)->np.ndarray:
+        """Note that this operator has no meaning when the MDP is constrained
+        """
         R_pi = np.array([self.R[i,p] for i, p in enumerate(pi)])
         P_s = np.array([self.P_sa[i,p,:] for i, p in enumerate(pi)])
         return R_pi + self.gamma * P_s @ V
