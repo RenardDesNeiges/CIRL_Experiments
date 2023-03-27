@@ -207,7 +207,7 @@ class Gridworld(MarkovDecisionProcess):
     
 
 def gridplot(gridworld:Gridworld, ax, scalar=None, policy = None, 
-             stochastic_policy=None, obstacles=None, goals=None):
+             stochastic_policy=None, obstacles=None, goals=None,traj=None):
     ax.set_xlim([0,gridworld.grid_width])
     ax.set_ylim([0,gridworld.grid_height])
     if scalar is not None:
@@ -231,3 +231,12 @@ def gridplot(gridworld:Gridworld, ax, scalar=None, policy = None,
     if goals is not None:
         for value in goals:
             ax.add_patch(Rectangle(value[0],1,1,edgecolor="g",facecolor='none',hatch='//'))
+    if traj is not None:
+        pointx = [event[0][0]+0.5 for event in traj]
+        pointy = [event[0][1]+0.5 for event in traj]
+        for step, event in enumerate(traj):
+            point = event[0]
+            arrow = np.array(gridworld.actions[event[1]])*0.3
+            ax.arrow(point[0]+0.5,point[1]+0.5,arrow[0],arrow[1],head_width=0.1,color='g')
+            ax.text(point[0]+0.7,point[1]+0.7, f'{step}', fontsize=15)
+        ax.plot(pointx,pointy,linewidth=2,color='b')
