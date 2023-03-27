@@ -75,10 +75,12 @@ class unregCMDPLP():
                           A_eq=A_eq, b_eq=b_eq,
                           A_ub=A_ub, b_ub=b_ub,
                           bounds=(0,None),method='highs-ds')
-        self.mu_opt = np.array([[res.x[a*self.MDP.n+s]
-                                for a in range(self.MDP.m)]
-                                for s in range(self.MDP.n)],dtype=np.float64)
-        return self.mu_opt
+        if res.success:
+            self.mu_opt = np.array([[res.x[a*self.MDP.n+s]
+                                    for a in range(self.MDP.m)]
+                                    for s in range(self.MDP.n)],dtype=np.float64)
+            return self.mu_opt
+        return res
         
     def recover_policy(self)->np.ndarray:
         T = np.einsum('ij,i->ij',self.mu_opt,1/np.sum(self.mu_opt,1))

@@ -12,6 +12,8 @@ class Complete(MarkovDecisionProcess):
                 gamma : float = 0.9, 
                 seed :  int = 1,
                 rmax :  float = 10.,
+                b    :  np.array = None,
+                Psi  :  np.array = None,
                 ) -> None:
         """
         Args:
@@ -38,7 +40,7 @@ class Complete(MarkovDecisionProcess):
                                             for _  in range(self.m)             ] 
                                             for _  in range(self.n)             ],dtype=np.float64) # P ∈ (n x m)
         
-        super().__init__(self.n,self.m,gamma,P_sa,R,self._get_state_distrib())
+        super().__init__(self.n,self.m,gamma,P_sa,R,self._get_state_distrib(),b=b,Psi=Psi)
 
 
     
