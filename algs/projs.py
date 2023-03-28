@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+from itertools import accumulate
 
 def euclidean_simplex(v, s=1):
     """ Compute the Euclidean projection on a positive simplex
@@ -19,6 +20,8 @@ def euclidean_simplex(v, s=1):
     The complexity of this algorithm is in O(n log(n)) as it involves sorting v.
     """
     assert s > 0, "Radius s must be strictly positive (%d <= 0)" % s
+    sh = v.shape  
+    v = jnp.reshape(v,(list(accumulate(sh,lambda x,y:x*y))[-1],))
     n, = v.shape  # will raise ValueError if v is not 1-D
     # check if we are already on the simplex
     if v.sum() == s and jnp.alltrue(v >= 0):
@@ -33,7 +36,7 @@ def euclidean_simplex(v, s=1):
     theta = float(cssv[rho] - s) / (rho+1)
     # compute the projection by thresholding v using theta
     w = (v - theta).clip(min=0)
-    return w
+    return jnp.reshape(w,sh)
 
 
 def euclidean_l1ball(v, s=1):
@@ -58,6 +61,8 @@ def euclidean_l1ball(v, s=1):
     euclidean_proj_simplex
     """
     assert s > 0, "Radius s must be strictly positive (%d <= 0)" % s
+    sh = v.shape  
+    v = jnp.reshape(v,(list(accumulate(sh,lambda x,y:x*y))[-1],))
     n, = v.shape  # will raise ValueError if v is not 1-D
     # compute the vector of absolute values
     u = jnp.abs(v)
@@ -70,7 +75,7 @@ def euclidean_l1ball(v, s=1):
     w = euclidean_simplex(u, s=s)
     # compute the solution to the original problem on v
     w *= jnp.sign(v)
-    return w
+    return jnp.reshape(w,sh)
 
 def euclidian_pos_orthant(v,):
     """Projects to the positive orthant
@@ -83,4 +88,6 @@ def euclidian_pos_orthant(v,):
         
     Quite a trivial operation (just returns max(0,v_i) for each coordinate v_i of v).
     """
-    return jnp.where(v<0, 0, v)
+    sh = v.shape  
+    v = jnp.reshape(v,(list(accumulate(sh,lambda x,y:x*y))[-1],))
+    return jnp.reshape(jnp.where(v<0, 0, v),sh)
