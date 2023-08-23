@@ -56,8 +56,8 @@ class ExtraGradientGDA():
     def step(f,x,y,eta,tau, proj):
         Dx = jax.grad(f,0)(x,y) # minimization parameter grad
         Dy = jax.grad(f,1)(x,y) # maximization parameter grad
-        EDx = jax.grad(f,0)(proj(x - eta*Dx, y + eta*tau*Dy))
-        EDy = jax.grad(f,1)(proj(x - eta*Dx, y + eta*tau*Dy))
+        EDx = jax.grad(f,0)(x - eta*Dx, y + eta*tau*Dy)
+        EDy = jax.grad(f,1)(x - eta*Dx, y + eta*tau*Dy)
         return proj(x - eta*EDx), proj(y + eta*tau*EDy)
 
     def solve(f,x,y,steps,eta,tau, 
@@ -69,6 +69,6 @@ class ExtraGradientGDA():
             if step:
                 x, y = step(f,x,y,eta,tau)
             else:
-                x, y = ExtraGradientGDA.step(f,x,y,eta,tau)
+                x, y = ExtraGradientGDA.step(f,x,y,eta,tau,proj)
         xs = jnp.array(xs); ys = jnp.array(ys); fs = jnp.array(fs)
         return xs,ys,fs
