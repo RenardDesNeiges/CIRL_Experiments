@@ -230,7 +230,11 @@ def gridplot(gridworld:Gridworld, ax, scalar=None, policy = None,
             ax.add_patch(Rectangle(value,1,1,edgecolor="r",facecolor='none',hatch='//'))
     if goals is not None:
         for value in goals:
-            ax.add_patch(Rectangle(value[0],1,1,edgecolor="g",facecolor='none',hatch='//'))
+            if value[1]>0:
+                ec = 'g' 
+            else:
+                ec = 'y' 
+            ax.add_patch(Rectangle(value[0],1,1,edgecolor=ec,facecolor='none',hatch='//'))
     if traj is not None:
         pointx = [event[0][0]+0.5 for event in traj]
         pointy = [event[0][1]+0.5 for event in traj]

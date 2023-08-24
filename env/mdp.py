@@ -8,16 +8,18 @@ class Sampler():
         
     def reset(self, s_0: int = None):
         if not s_0:
-            self.s_t = rd.choice(np.arange(self.MDP.n),
-                                 p = self.MDP.init_distrib)
+            p = self.MDP.init_distrib.astype('float64')
+            p /= np.sum(p)
+            self.s_t = rd.choice(np.arange(self.MDP.n), p = p)
         else: 
             self.s_t = s_0
         return self.s_t # sets the initial state to 
     
     def step(self, action:int):
         reward = self.MDP.R[self.s_t,action]
-        self.s_t = rd.choice(np.arange(self.MDP.n),
-                             p = self.MDP.P_sa[self.s_t,action,:]) 
+        p = self.MDP.P_sa[self.s_t,action,:].astype('float64')
+        p /= np.sum(p)
+        self.s_t = rd.choice(np.arange(self.MDP.n), p = p)
         return self.s_t, reward
 
 class MarkovDecisionProcess():
