@@ -11,7 +11,7 @@ from itertools import accumulate
 
 from env.gridworld import Gridworld
 
-from algs.policy_gradients import PolicyGradientMethod, sample_trajectory, vanillaGradOracle, naturalGradOracle, monteCarloVanillaGrad, Sampler
+from algs.policy_gradients import PolicyGradientMethod, vanillaGradOracle, naturalGradOracle, monteCarloVanillaGrad, Sampler, monteCarloNaturalGrad
 
 def flatten(v):
     return jnp.reshape(v,(list(accumulate(v.shape,lambda x,y:x*y))[-1],))
@@ -27,7 +27,7 @@ gridMDP.init_distrib =  jnp.exp(jax.random.uniform(key,(gridMDP.n,))) / \
 
 parametrization = lambda p : nn.softmax(p,axis=1)
 
-HORIZON = 10
+HORIZON = 5
 BATCH = 10
 sampler = Sampler(gridMDP,key)
 
@@ -39,6 +39,7 @@ sampler = Sampler(gridMDP,key)
 """Defining the logger"""
 def logger(theta):
         return {
+            'theta': theta,
             'pi': nn.softmax(theta,axis=1),
             'J': gridMDP.J(nn.softmax(theta,axis=1))
         }
@@ -46,11 +47,17 @@ def logger(theta):
 
 """Trainig"""
 alg = PolicyGradientMethod(gridMDP,key,
-                           monteCarloVanillaGrad(gridMDP,sampler,key,parametrization,HORIZON,BATCH)
+                           monteCarloNaturalGrad(
+                               gridMDP,
+                               sampler,
+                               key,
+                               parametrization,
+                               HORIZON,BATCH)
                            ,logger)
-log, theta = alg.train(10,4e-2)
+log, theta = alg.train(20,4e-2)
 
 """Plotting the training curve"""
+thetas=jnp.stack([e['theta'] for e in log])
 pis=jnp.stack([e['pi'] for e in log])
 js=jnp.stack([e['J'] for e in log])
 fig, ax = plt.subplots(1,2,figsize=(10,5))
