@@ -15,8 +15,10 @@ class Sampler():
         self.s_t :int = None
         self.key = key
         
-    def reset(self, s_0: int = None):
+    def reset(self, s_0: int = None, key= None):
         if not s_0:
+            if key is not None:
+                self.key = key                
             p = self.MDP.init_distrib.astype('float64')
             p /= jnp.sum(p)
             self.s_t = jax.random.choice(self.key,jnp.arange(self.MDP.n), p = p)

@@ -47,7 +47,7 @@ def logger(theta):
 
 """Trainig"""
 alg = PolicyGradientMethod(gridMDP,key,
-                           monteCarloNaturalGrad(
+                           monteCarloVanillaGrad(
                                gridMDP,
                                sampler,
                                key,

@@ -27,9 +27,11 @@ class PolicyGradientMethod():
         theta = jax.random.uniform(self.key,(self.MDP.n,self.MDP.m))
         log = [self.logger(theta)]
         for _ in tqdm(range(nb_steps),disable=not self.progress_bar):
-            theta += lr * jnp.clip(self.gradient_sampler(theta),
+            _g = jnp.clip(self.gradient_sampler(theta),
                                    a_min=-self.clip_thresh,
                                    a_max=self.clip_thresh)
+            _g = jax.numpy.nan_to_num(_g, copy=False, nan=0.0)
+            theta += lr * _g
             log += [self.logger(theta)]
         return log, theta
 
@@ -61,7 +63,7 @@ def naturalGradOracle(mdp,sampler,key,parametrization,B,H):
         g = jax.grad(lambda p : mdp.J(parametrization(p)))(theta)    
         f_inv = jla.pinv(mdp.exact_fim_oracle(theta,lambda p:nn.softmax(p,axis=1)))
         return jnp.reshape(f_inv@flatten(g),_shape)
-    return naturalGrad
+    return jax.jit(naturalGrad)
 
 """Stochastic gradients"""
 
@@ -76,9 +78,36 @@ def gpomdp(batch,theta,B,H,gamma):
         
     return (1/B)*jnp.sum(jnp.array([single_sample_gpomdp(batch,theta,b,H) for b in range(B)]),axis=0)
 
+
+def fast_gpodmp(batch,theta,B,H,gamma,parametrization):
+    s_batch = jnp.array([[e[0] for e in s] for s in batch])
+    a_batch = jnp.array([[e[1] for e in s] for s in batch])
+    r_batch = jnp.array([[e[2] for e in s] for s in batch])
+
+    def g_log(s,a,theta,parametrization):
+        return jax.grad(lambda p : jnp.log(parametrization(p))[s,a])(theta)
+    _f = lambda s,a : g_log(s,a,theta,parametrization)
+
+
+    batch_grads = jax.vmap(jax.vmap(_f))(s_batch, a_batch) ##vmap can only operate on a single axis 
+    summed_grads = jnp.cumsum(batch_grads,axis=0)
+
+    gamma_tensor = gamma**jnp.arange(H)
+    gamma_tensor = jnp.repeat(jnp.repeat(jnp.repeat(
+        gamma_tensor[:, jnp.newaxis, jnp.newaxis, jnp.newaxis], 
+            B, axis=1),
+                summed_grads.shape[2],axis=2),
+                    summed_grads.shape[3],axis=3)
+
+    reward_grads = summed_grads*jnp.repeat(jnp.repeat(
+        r_batch[:, :, jnp.newaxis, jnp.newaxis], 
+        summed_grads.shape[2], axis=2),
+            summed_grads.shape[3],axis=3) * gamma_tensor
+    return jnp.sum(reward_grads,axis=(0,1))
+
 def computeMonteCarloVanillaGrad(theta,mdp,sampler,key,parametrization,B,H):
     batch = sample_batch(parametrization(theta),mdp,sampler,H,B,key)
-    return gpomdp(batch,theta,B,H,mdp.gamma)
+    return fast_gpodmp(batch,theta,B,H,mdp.gamma,parametrization)
 
 def monteCarloVanillaGrad(mdp,sampler,key,parametrization,B,H):
     return lambda p : computeMonteCarloVanillaGrad(p,mdp,sampler,key,parametrization,B,H)
