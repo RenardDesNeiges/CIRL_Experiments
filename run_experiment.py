@@ -9,9 +9,9 @@ from jax.config import config; config.update("jax_enable_x64", True)
 import matplotlib.pyplot as plt
 from itertools import accumulate
 
-from env.gridworld import Gridworld
+from env.gridworld import Gridworld, gridplot
 
-from algs.policy_gradients import PolicyGradientMethod, vanillaGradOracle, naturalGradOracle, monteCarloVanillaGrad, Sampler, monteCarloNaturalGrad
+from algs.policy_gradients import PolicyGradientMethod, vanillaGradOracle, naturalGradOracle, monteCarloVanillaGrad, slowMonteCarloVanillaGrad, Sampler, monteCarloNaturalGrad
 
 def flatten(v):
     return jnp.reshape(v,(list(accumulate(v.shape,lambda x,y:x*y))[-1],))
@@ -27,8 +27,8 @@ gridMDP.init_distrib =  jnp.exp(jax.random.uniform(key,(gridMDP.n,))) / \
 
 parametrization = lambda p : nn.softmax(p,axis=1)
 
-HORIZON = 5
-BATCH = 10
+HORIZON = 10
+BATCH = 30
 sampler = Sampler(gridMDP,key)
 
 """ Picking the gradient evaluation method 
@@ -47,14 +47,14 @@ def logger(theta):
 
 """Trainig"""
 alg = PolicyGradientMethod(gridMDP,key,
-                           monteCarloVanillaGrad(
+                            monteCarloVanillaGrad(
                                gridMDP,
                                sampler,
                                key,
                                parametrization,
-                               HORIZON,BATCH)
+                               BATCH,HORIZON)
                            ,logger)
-log, theta = alg.train(20,4e-2)
+log, theta = alg.train(40,1)
 
 """Plotting the training curve"""
 thetas=jnp.stack([e['theta'] for e in log])
@@ -65,4 +65,10 @@ ax[0].plot(js)
 ax[0].set_title('Objective function (maximizing)')
 ax[1].plot(pis[:,0,:2])
 ax[1].set_title('Two example policy coordinates')
+plt.show()
+
+fig, ax = plt.subplots(1,figsize=(10,10,))
+gridplot(gridMDP,ax,stochastic_policy=pis[-1],goals=goals)
+ax.set_title('Stochastic Vanilla PG solution')
+fig.tight_layout()
 plt.show()
