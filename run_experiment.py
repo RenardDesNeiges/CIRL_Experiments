@@ -19,10 +19,12 @@ def flatten(v):
 key = jax.random.PRNGKey(0) 
 
 """Defining an MDP"""
-goals = [((1,1),100)]
-gridMDP = Gridworld(2,2,0.1,0.9,goals=goals,obstacles=[]) # this is our MDP
+R = 100
+P = -300
+goals = [((2,0),R),((1,0),P),((1,1),P)]
+gridMDP = Gridworld(3,3,0.1,0.9,goals=goals,obstacles=[]) 
 gridMDP.init_distrib =  jnp.exp(jax.random.uniform(key,(gridMDP.n,))) / \
-    jnp.sum(jnp.exp(jax.random.uniform(key,(gridMDP.n,)))) # setting its init distribution
+    jnp.sum(jnp.exp(jax.random.uniform(key,(gridMDP.n,))))
 
 
 parametrization = lambda p : nn.softmax(p,axis=1)
@@ -47,14 +49,14 @@ def logger(theta):
 
 """Trainig"""
 alg = PolicyGradientMethod(gridMDP,key,
-                            monteCarloVanillaGrad(
+                            monteCarloNaturalGrad(
                                gridMDP,
                                sampler,
                                key,
                                parametrization,
                                BATCH,HORIZON)
                            ,logger)
-log, theta = alg.train(40,1)
+log, theta = alg.train(40,5e-3)
 
 """Plotting the training curve"""
 thetas=jnp.stack([e['theta'] for e in log])

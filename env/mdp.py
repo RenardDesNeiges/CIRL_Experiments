@@ -95,7 +95,9 @@ class MarkovDecisionProcess():
 
     def J(self,pi, regularizer = None): 
         # TODO write a docstring
-        return jnp.dot(flatten(self.R),flatten(self.occ_measure(pi)))
+        if regularizer is None: reg_term = 0
+        else:  reg_term = jnp.dot(jax.vmap(regularizer)(pi),self.state_occ_measure(pi))
+        return jnp.dot(flatten(self.R),flatten(self.occ_measure(pi))) - reg_term
 
     def exact_fim_oracle(self,theta,parametrization):
         # TODO write a docstring
