@@ -59,7 +59,7 @@ def sample_batch(pi,mdp,smp,H,B,key,regularizer=None):
 """Exact gradient oracles"""
 
 def vanillaGradOracle(mdp,sampler,key,parametrization,B,H,reg=None):
-    return jax.grad(lambda p : mdp.J(parametrization(p),reg))
+    return jax.jit(jax.grad(lambda p : mdp.J(parametrization(p),reg)))
 
 def naturalGradOracle(mdp,sampler,key,parametrization,B,H,reg=None):
     def naturalGrad(theta):

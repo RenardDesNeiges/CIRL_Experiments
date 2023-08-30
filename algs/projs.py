@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+from jax.numpy import linalg as jla
 from itertools import accumulate
 
 def euclidean_simplex(v, s=1):
@@ -76,6 +77,24 @@ def euclidean_l1ball(v, s=1):
     # compute the solution to the original problem on v
     w *= jnp.sign(v)
     return jnp.reshape(w,sh)
+
+def euclidean_l2ball(v, s=1):
+    """ Compute the Euclidean projection on a L2-ball
+    ----------
+    v: (n,) numpy array,
+       n-dimensional vector to project
+    s: int, optional, default: 1,
+       radius of the L1-ball
+    Returns
+    -------
+    w: (n,) numpy array,
+       Euclidean projection of v on the L1-ball of radius s
+    """
+    assert s > 0, "Radius s must be strictly positive (%d <= 0)" % s
+
+    norm = jla.norm(v)
+    if norm < s: return jnp.reshape(v,sh)
+    return v*(s/norm)
 
 def euclidian_pos_orthant(v,):
     """Projects to the positive orthant

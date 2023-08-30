@@ -93,11 +93,12 @@ class MarkovDecisionProcess():
         mu_s = self.state_occ_measure(pi)
         return pi * repeat(mu_s, 's -> s new_axis', new_axis=self.m)
 
-    def J(self,pi, regularizer = None): 
+    def J(self,pi, regularizer = None, reward=None): 
         # TODO write a docstring
+        if reward is None: reward = self.R
         if regularizer is None: reg_term = 0
         else:  reg_term = jnp.dot(jax.vmap(regularizer)(pi),self.state_occ_measure(pi))
-        return jnp.dot(flatten(self.R),flatten(self.occ_measure(pi))) - reg_term
+        return jnp.dot(flatten(reward),flatten(self.occ_measure(pi))) - reg_term
 
     def exact_fim_oracle(self,theta,parametrization):
         # TODO write a docstring
