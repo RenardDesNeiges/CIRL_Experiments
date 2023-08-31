@@ -3,9 +3,10 @@ from jax import numpy as jnp
 from jax.numpy import linalg as jla
 import jax.nn as nn
 
-from typing import Callable, Any, Dict, List
+from typing import Callable, Any, Dict, List, Tuple
 
 from env.mdp import MarkovDecisionProcess
+from env.sample import Sampler
 from algs.utils import flatten
 
 CLIP_THRESH = 1e3
@@ -15,7 +16,6 @@ CLIP_THRESH = 1e3
 f: (batch [Array],  parameters [Dict of jnp.arrays]) -> grad [jnp.array]
 
 BUUUUT, the functions here are generators that return functions with that prototype, so they themselves have a different prototype
-
 """
 
 def vanillaGradOracle(  J:Callable,
@@ -23,7 +23,7 @@ def vanillaGradOracle(  J:Callable,
                         pFun:Callable,
                         rFun:Callable,
                         reg:Callable
-                        )->Callable[[List[Any],Dict[str,jnp.ndarray]],jnp.ndarray]:
+                        )->Callable[[Dict[str,jnp.ndarray]],jnp.ndarray]:
     """ Generates a (vanilla) policy gradient oracle function for some mdp,
         policy parametrization and reward function, supports regularized
         functions.
@@ -36,10 +36,9 @@ def vanillaGradOracle(  J:Callable,
         reg (Callable): regularizer.
 
     Returns:
-        Callable[[List[Any],Dict[str,jnp.ndarray]],jnp.ndarray]: the gradient function.
+        Callable[[Dict[str,jnp.ndarray]],jnp.ndarray]: the gradient function.
     """
-    def grad_function(b,p):
-        _ = b
+    def grad_function(p):
         reward = rFun(p['reward'])
         grad = jax.grad(
             lambda theta: J(mdp,pFun(theta),reward,reg)
@@ -87,8 +86,7 @@ def naturalGradOracle(  J:Callable,
     Returns:
         Callable[[List[Any],Dict[str,jnp.ndarray]],jnp.ndarray]: the gradient function.
     """
-    def grad_function(b,p):
-        _ = b
+    def grad_function(p):
         _shape = p['policy'].shape
         reward = rFun(p['reward'])
         grad = jax.grad(
@@ -100,47 +98,70 @@ def naturalGradOracle(  J:Callable,
     
     return jax.jit(grad_function)
 
-"""Stochastic gradients"""
+"""Stochastic gradients estimators
+--> all gradient functions have the prototype 
+f: (batch [Array],  parameters [Dict of jnp.arrays]) -> grad [jnp.array]
 
-def gpomdp(batch,theta,B,H,gamma,parametrization,reg=None):
-    #TODO implement regularizer
-    def g_log(theta,s,a):
-        return jax.grad(lambda p : jnp.log(parametrization(p))[s,a])(theta)
-    def trace_grad(batch,theta,b,h):
-        return jnp.sum(jnp.array([g_log(theta,e[0],e[1]) for e in batch[b][:h]]),axis=0)
-    def single_sample_gpomdp(batch,theta,b,H):
-        return jnp.sum(jnp.array([(gamma**h)*batch[b][h][2] \
-                    *trace_grad(batch,theta,b,h) for h in range(1,H)]),axis=0)
-        
-    return (1/B)*jnp.sum(jnp.array([single_sample_gpomdp(batch,theta,b,H) \
-                            for b in range(B)]),axis=0)
+Here the batch entry is actually used as these are stochastic estimators that require data to get a correct estimation.
 
+"""
 
-def fast_gpomdp(batch,theta,B,H,gamma,parametrization,reg=None):
-    #TODO implement regularizer
-    def g_log(s,a,theta,parametrization):
-        return jax.grad(lambda p : jnp.log(parametrization(p))[s,a])(theta)
-    _f = lambda s,a : g_log(s,a,theta,parametrization)
+def gpomdp( mdp:MarkovDecisionProcess,
+            pFun:Callable,
+            smp:Sampler
+            )->Callable[[Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray],
+                         Dict[str,jnp.ndarray]],jnp.ndarray]:
+    """ Generates a GPOMDP policy gradient estimator function for some mdp,
+        policy parametrization using some sampler.
+
+    Args:
+        mdp (MarkovDecisionProcess): the MDP.
+        pFun (Callable): the policy parametrization.
+        smp (Sampler): the sampler.
+
+    Returns:
+        Callable[[Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray], Dict[str,jnp.ndarray]],jnp.ndarray]: the gradient evaluation function (which takes in a sampled batch as well as the parameters and returns the gradients).
+    """
+    def grad(batch,p):
+        def g_log(s,a,theta,pFun):
+            return jax.grad(lambda p : jnp.log(pFun(p))[s,a])(theta)
+        _f = lambda s,a : g_log(s,a,p['policy'],pFun)
     
-    s_batch = jnp.array([[e[0] for e in s] for s in batch])
-    a_batch = jnp.array([[e[1] for e in s] for s in batch])
-    r_batch = jnp.array([[e[2] for e in s] for s in batch])
+        s_batch, a_batch, r_batch = batch
+        batch_grads = jax.vmap(jax.vmap(_f))(s_batch, a_batch) 
+        summed_grads = jnp.cumsum(batch_grads,axis=1) 
+        gamma_tensor = mdp.gamma**jnp.arange(smp.h) 
+        gamma_tensor = jnp.repeat(jnp.repeat(jnp.repeat(
+                    gamma_tensor[jnp.newaxis, :, jnp.newaxis, jnp.newaxis], 
+                    smp.b, axis=0), summed_grads.shape[2],axis=2), 
+                    summed_grads.shape[3],axis=3)
+        reward_tensor = jnp.repeat(jnp.repeat(                      # here we repeat the 
+                        r_batch[:, :, jnp.newaxis, jnp.newaxis],    # reward along the right 
+                        summed_grads.shape[2], axis=2),             # axes so we can elementwise 
+                        summed_grads.shape[3],axis=3)               # multiply with the gradients
 
-    batch_grads = jax.vmap(jax.vmap(_f))(s_batch, a_batch) ##vmap can only operate on a single axis 
-    summed_grads = jnp.cumsum(batch_grads,axis=1) 
+        gradient_tensor = summed_grads[:,:-1,:,:] \
+                        * reward_tensor[:,1:,:,:] \
+                        * gamma_tensor[:,1:,:,:] 
 
-    gamma_tensor = gamma**jnp.arange(H) #here we build a discount factor tensor of the right shape
-    gamma_tensor = jnp.repeat(jnp.repeat(jnp.repeat(
-        gamma_tensor[jnp.newaxis, :, jnp.newaxis, jnp.newaxis], 
-            B, axis=0), summed_grads.shape[2],axis=2), summed_grads.shape[3],axis=3)
-    reward_tensor = jnp.repeat(jnp.repeat(
-        r_batch[:, :, jnp.newaxis, jnp.newaxis], 
-        summed_grads.shape[2], axis=2),
-            summed_grads.shape[3],axis=3) #here we repeat the reward along the right axes so we can elementwise multiply with the gradients
+        return (1/smp.b)*jnp.sum(gradient_tensor,axis=(0,1))
+    return jax.jit(grad)
 
-    gradient_tensor = summed_grads[:,:-1,:,:] * reward_tensor[:,1:,:,:] * gamma_tensor[:,1:,:,:] # finally we get our gradients
+# def gpomdp(batch,theta,B,H,gamma,parametrization,reg=None):
+#     #TODO implement regularizer
+#     def g_log(theta,s,a):
+#         return jax.grad(lambda p : jnp.log(parametrization(p))[s,a])(theta)
+#     def trace_grad(batch,theta,b,h):
+#         return jnp.sum(jnp.array([g_log(theta,e[0],e[1]) for e in batch[b][:h]]),axis=0)
+#     def single_sample_gpomdp(batch,theta,b,H):
+#         return jnp.sum(jnp.array([(gamma**h)*batch[b][h][2] \
+#                     *trace_grad(batch,theta,b,h) for h in range(1,H)]),axis=0)
+        
+#     return (1/B)*jnp.sum(jnp.array([single_sample_gpomdp(batch,theta,b,H) \
+#                             for b in range(B)]),axis=0)
 
-    return (1/B)*jnp.sum(gradient_tensor,axis=(0,1))
+
+
 
 def computeSlowMonteCarloVanillaGrad(theta,mdp,sampler,key,parametrization,B,H):
     #TODO implement regularizer
