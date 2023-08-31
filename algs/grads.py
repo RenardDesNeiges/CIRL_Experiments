@@ -48,7 +48,7 @@ def vanillaGradOracle(  J:Callable,
     
     return jax.jit(grad_function)
 
-def exact_fim_oracle(mdp: MarkovDecisionProcess,pFun : Callable, _p:jnp.array)->jnp.ndarray:
+def exactFIMOracle(mdp: MarkovDecisionProcess,pFun : Callable, _p:jnp.array)->jnp.ndarray:
     """Computes the exact FIM for some policy parameters and parameterization on some MDP.
 
     Args:
@@ -92,7 +92,7 @@ def naturalGradOracle(  J:Callable,
         grad = jax.grad(
             lambda theta: J(mdp,pFun(theta),reward,reg)
             )
-        f_inv = jla.pinv(exact_fim_oracle(mdp,pFun, p['policy']))
+        f_inv = jla.pinv(exactFIMOracle(mdp,pFun, p['policy']))
         g = grad(p['policy'])
         return jnp.reshape(f_inv@flatten(g),_shape)
     
@@ -136,8 +136,8 @@ def gpomdp( mdp:MarkovDecisionProcess,
                     smp.b, axis=0), summed_grads.shape[2],axis=2), 
                     summed_grads.shape[3],axis=3)
         reward_tensor = jnp.repeat(jnp.repeat(                      # here we repeat the 
-                        r_batch[:, :, jnp.newaxis, jnp.newaxis],    # reward along the right 
-                        summed_grads.shape[2], axis=2),             # axes so we can elementwise 
+                        r_batch[:, :, jnp.newaxis, jnp.newaxis],    # reward along the axes (2,3)
+                        summed_grads.shape[2], axis=2),             # so we can elementwise 
                         summed_grads.shape[3],axis=3)               # multiply with the gradients
 
         gradient_tensor = summed_grads[:,:-1,:,:] \
@@ -147,53 +147,46 @@ def gpomdp( mdp:MarkovDecisionProcess,
         return (1/smp.b)*jnp.sum(gradient_tensor,axis=(0,1))
     return jax.jit(grad)
 
-# def gpomdp(batch,theta,B,H,gamma,parametrization,reg=None):
-#     #TODO implement regularizer
-#     def g_log(theta,s,a):
-#         return jax.grad(lambda p : jnp.log(parametrization(p))[s,a])(theta)
-#     def trace_grad(batch,theta,b,h):
-#         return jnp.sum(jnp.array([g_log(theta,e[0],e[1]) for e in batch[b][:h]]),axis=0)
-#     def single_sample_gpomdp(batch,theta,b,H):
-#         return jnp.sum(jnp.array([(gamma**h)*batch[b][h][2] \
-#                     *trace_grad(batch,theta,b,h) for h in range(1,H)]),axis=0)
-        
-#     return (1/B)*jnp.sum(jnp.array([single_sample_gpomdp(batch,theta,b,H) \
-#                             for b in range(B)]),axis=0)
-
-
-
-
-def computeSlowMonteCarloVanillaGrad(theta,mdp,sampler,key,parametrization,B,H):
-    #TODO implement regularizer
-    batch = sample_batch(parametrization(theta),mdp,sampler,H,B,key)
-    return gpomdp(batch,theta,B,H,mdp.gamma,parametrization)
-
-def computeMonteCarloVanillaGrad(theta,mdp,sampler,key,parametrization,B,H,regularizer):
-    batch = sample_batch(parametrization(theta),mdp,sampler,H,B,key,regularizer)
-    return fast_gpomdp(batch,theta,B,H,mdp.gamma,parametrization)
-
-def slowMonteCarloVanillaGrad(mdp,sampler,key,parametrization,B,H):
-    #TODO implement regularizer
-    return lambda p : computeSlowMonteCarloVanillaGrad(p,mdp,sampler,key,parametrization,B,H)
-
-def monteCarloVanillaGrad(mdp,sampler,key,parametrization,B,H,regularizer=None):
-    return lambda p : computeMonteCarloVanillaGrad(p,mdp,sampler,key,parametrization,B,H,regularizer)
-
 """Stochastic natural gradients and FIM estimation"""
 
-def fim_sample(sa,theta):
-    pg = flatten(jax.grad(lambda p : jnp.log(nn.softmax(p,axis=1))[sa[0],sa[1]])(theta))
-    return jnp.outer(pg,pg)
-def estimate_fim(batch,theta):
-    sa_pairs = jnp.array([flatten(jnp.array([[step[0] for step in trace] for trace in batch])), flatten(jnp.array([[step[1] for step in trace] for trace in batch]))])
-    return jnp.sum(jnp.array([fim_sample(sa_pairs[:,i],theta) for i in range(sa_pairs.shape[1])]),axis=0)/sa_pairs.shape[1]
 
-def computeMonteCarloNaturalGrad(theta,mdp,sampler,key,parametrization,B,H,regularizer):
-    batch = sample_batch(parametrization(theta),mdp,sampler,H,B,key,regularizer)
-    _g = fast_gpomdp(batch,theta,B,H,mdp.gamma,parametrization)
-    _shape = _g.shape
-    fim = estimate_fim(batch,theta)
-    return jnp.reshape(jla.pinv(fim)@flatten(_g),_shape) # TODO : replace with conjugate grads
+# I think the batch storage has changed since the last time I looked at that....
+# So this has to be rewritten
+# Also the policy parametrization is hardcoded here 
+# (which is absolutely cursed shit)
+# I think what makes most sense is that this should return a function
+# that should match the signature of the function returned by gpomdp
 
-def monteCarloNaturalGrad(mdp,sampler,key,parametrization,B,H,regularizer):
-    return lambda p : computeMonteCarloNaturalGrad(p,mdp,sampler,key,parametrization,B,H,regularizer)
+def fimEstimator(pFun):
+    
+    def fim(batch,p):
+        def fim_sample(s,a):
+            pg = flatten(jax.grad(lambda p : jnp.log(pFun(p))[s,a])(p['policy']))
+            return jnp.outer(pg,pg)
+        
+        s_batch, a_batch, _ = batch
+        s_batch = flatten(s_batch); a_batch = flatten(a_batch)
+        fim_sbatch = jax.vmap(fim_sample)(s_batch,a_batch)
+        return jnp.sum(fim_sbatch,axis=0)/fim_sbatch.shape[0]
+
+    return jax.jit(fim)
+
+# def estimate_fim(batch,theta):
+
+#     def fim_sample(sa,theta):
+#         pg = flatten(jax.grad(lambda p : jnp.log(nn.softmax(p,axis=1))[sa[0],sa[1]])(theta))
+#         return jnp.outer(pg,pg)
+
+    
+#     sa_pairs = jnp.array([flatten(jnp.array([[step[0] for step in trace] for trace in batch])), flatten(jnp.array([[step[1] for step in trace] for trace in batch]))])
+#     return jnp.sum(jnp.array([fim_sample(sa_pairs[:,i],theta) for i in range(sa_pairs.shape[1])]),axis=0)/sa_pairs.shape[1]
+
+# def computeMonteCarloNaturalGrad(theta,mdp,sampler,key,parametrization,B,H,regularizer):
+#     batch = sample_batch(parametrization(theta),mdp,sampler,H,B,key,regularizer)
+#     _g = fast_gpomdp(batch,theta,B,H,mdp.gamma,parametrization)
+#     _shape = _g.shape
+#     fim = estimate_fim(batch,theta)
+#     return jnp.reshape(jla.pinv(fim)@flatten(_g),_shape) # TODO : replace with conjugate grads
+
+# def monteCarloNaturalGrad(mdp,sampler,key,parametrization,B,H,regularizer):
+#     return lambda p : computeMonteCarloNaturalGrad(p,mdp,sampler,key,parametrization,B,H,regularizer)
