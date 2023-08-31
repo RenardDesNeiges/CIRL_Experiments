@@ -3,11 +3,11 @@ from jax import numpy as jnp
 from jax.numpy import linalg as jla
 import jax.nn as nn
 
-from itertools import accumulate
 from tqdm import tqdm
-
 from typing import Callable, Any, Dict, Tuple, List
-from env.mdp import MarkovDecisionProcess, Sampler
+
+from env.mdp import MarkovDecisionProcess
+from env.sample import Sampler
 
 """
 
@@ -49,10 +49,11 @@ class Optimizer():
         self.proc   = proc
         
         
-    def train(self,steps:int,pbar:bool=False)->Tuple[Dict[str,Any],List[Dict[str,Any]]]:
+    def train(self,key:jax.random.KeyArray,steps:int,pbar:bool=False)->Tuple[Dict[str,Any],List[Dict[str,Any]]]:
         """Optimize for some number of steps.
 
         Args:
+            key (jax.random.KeyArray): jax PRNG key.
             steps (int): number of steps to optimize for.
             pbar (bool, optional):if True display a tqdm progress bar. Defaults to False.
 

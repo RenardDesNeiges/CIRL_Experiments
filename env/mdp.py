@@ -5,10 +5,6 @@ from jax.numpy import linalg as jla
 from einops import repeat
 from itertools import accumulate
 
-""" Useful helper functions """
-def flatten(v):
-    return jnp.reshape(v,(list(accumulate(v.shape,lambda x,y:x*y))[-1],))
-
 class MarkovDecisionProcess():
     def __init__(self,
             n  :int, 
@@ -63,21 +59,6 @@ class MarkovDecisionProcess():
         """
         mu_s = self.state_occ_measure(pi)
         return pi * repeat(mu_s, 's -> s new_axis', new_axis=self.m)
-
-    def J(self,pi, regularizer = None, reward=None): 
-        # TODO write a docstring
-        if reward is None: reward = self.R
-        if regularizer is None: reg_term = 0
-        else:  reg_term = jnp.dot(jax.vmap(regularizer)(pi),self.state_occ_measure(pi))
-        return jnp.dot(flatten(reward),flatten(self.occ_measure(pi))) - reg_term
-
-    def exact_fim_oracle(self,theta,parametrization):
-        # TODO write a docstring
-        v = jax.jacfwd(lambda p : flatten(jnp.log(parametrization(p))))(theta) # computing the jacobian (step 1)
-        jac = jnp.reshape(v,(self.n*self.m,self.n*self.m)) # flatten last two dimensions (step 1)
-        bop = jnp.einsum('bi,bj->bji',jac,jac) # batch outer-product (step 2)
-        return jnp.einsum('bij,b->ij',bop,
-                          flatten(self.occ_measure(parametrization(theta)))) # fisher information matrix (I hope) (step 3)aa
 
     def next_state_distribution(self, s:int, a:int)->jnp.ndarray:
         """Given a fixed state-action pair, gives the distribution on the next state.

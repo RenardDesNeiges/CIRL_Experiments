@@ -7,59 +7,23 @@ from itertools import accumulate
 from tqdm import tqdm
 
 from env.mdp import MarkovDecisionProcess, Sampler
-
-""" Useful helper functions """
-def flatten(v):
-    return jnp.reshape(v,(list(accumulate(v.shape,lambda x,y:x*y))[-1],))
+from algs.utils import flatten
 
 CLIP_THRESH = 1e3
-
-class PolicyGradientMethod():
-    def __init__(self, MDP, key, gradient_sampler, logger, progress_bar=True, clip_thresh=CLIP_THRESH) -> None:
-        self.MDP : MarkovDecisionProcess = MDP
-        self.key = key
-        self.gradient_sampler = gradient_sampler
-        self.logger = logger
-        self.progress_bar = progress_bar
-        self.clip_thresh = clip_thresh
-
-        
-    def train(self, nb_steps, lr ):
-        theta = jax.random.uniform(self.key,(self.MDP.n,self.MDP.m))
-        log = [self.logger(theta)]
-        for _ in tqdm(range(nb_steps),disable=not self.progress_bar):
-            _g = jnp.clip(self.gradient_sampler(theta),
-                                   a_min=-self.clip_thresh,
-                                   a_max=self.clip_thresh)
-            _g = jax.numpy.nan_to_num(_g, copy=False, nan=0.0)
-            theta += lr * _g
-            log += [self.logger(theta)]
-        return log, theta
-
-""" Generic sampling routines for MDPs """
-def sample_trajectory(pi,mdp,smp,H,key,regularizer=None):
-    def pick_action(pi,s,mdp):
-        p = pi[s]; p /= jnp.sum(p)
-        return jax.random.choice(key,jnp.arange(mdp.m), p = p)
-        
-    traj = []
-    r_t = 0
-    s_t = smp.reset()
-    for _ in range(H):
-        a_t = pick_action(pi,s_t,mdp)
-        traj += [(s_t,a_t,r_t)]
-        s_t, r_t = smp.step(a_t)
-        if regularizer is not None:
-            r_t -= regularizer(pi[s_t,:])
-    return traj
-def sample_batch(pi,mdp,smp,H,B,key,regularizer=None):
-    subkeys = jax.random.split(key,B)
-    return [sample_trajectory(pi,mdp,smp,H,k,regularizer) for k in subkeys]
 
 """Exact gradient oracles"""
 
 def vanillaGradOracle(mdp,sampler,key,parametrization,B,H,reg=None):
     return jax.jit(jax.grad(lambda p : mdp.J(parametrization(p),reg)))
+
+def exact_fim_oracle(self,theta,parametrization):
+    # TODO write a docstring
+    # TODO move to grads
+    v = jax.jacfwd(lambda p : flatten(jnp.log(parametrization(p))))(theta) # computing the jacobian (step 1)
+    jac = jnp.reshape(v,(self.n*self.m,self.n*self.m)) # flatten last two dimensions (step 1)
+    bop = jnp.einsum('bi,bj->bji',jac,jac) # batch outer-product (step 2)
+    return jnp.einsum('bij,b->ij',bop,
+                        flatten(self.occ_measure(parametrization(theta)))) # fisher information matrix (I hope) (step 3)
 
 def naturalGradOracle(mdp,sampler,key,parametrization,B,H,reg=None):
     def naturalGrad(theta):
