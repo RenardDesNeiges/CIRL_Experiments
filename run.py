@@ -5,7 +5,8 @@ import jax.nn as nn
 import matplotlib.pyplot as plt
 
 from env.gridworld import Gridworld
-from algs.opt import Optimizer, defaultLogger
+from algs.opt import Optimizer, initDirectPG
+from algs.grads import vanillaGradOracle
 from algs.returns import J
 
 def main():
@@ -20,11 +21,21 @@ def main():
     gridMDP.init_distrib =  jnp.exp(jax.random.uniform(key,(gridMDP.n,))) / \
         jnp.sum(jnp.exp(jax.random.uniform(key,(gridMDP.n,))))
 
+    """Defining the relevant function"""
     pFun = lambda p : nn.softmax(p,axis=1) # policy function
-    init = lambda : {'policy': jax.random.uniform(key,(gridMDP.n,gridMDP.m))}
-    grad = lambda _, p : jax.jit(jax.grad(lambda p : J(gridMDP,pFun(p['policy']))))(p)
-    proc = lambda g : {'policy': LR*g['policy']}
+    init = initDirectPG(key,gridMDP)
+    pGrad = vanillaGradOracle(J,gridMDP,pFun,lambda x:x, None)
+    def grad(batch,p):
+        _pg = pGrad(batch,p)
+        _rg = jnp.zeros_like(p['reward'])
+        return {
+            'policy' : _pg,
+            'reward' : _rg,
+        }
+        
+    proc = lambda g : {'policy': LR*g['policy'], 'reward': g['reward']}
     
+    """Defining the logger"""
     def logger( params, grads, step, i):
         return {
             'J'         : J(gridMDP,pFun(params['policy'])),
@@ -34,12 +45,14 @@ def main():
             'iter'      : i
         }
             
-    
+    """Optimizing"""
     opt = Optimizer(init=init,grad=grad,proc=proc,log=logger)
-    _, log = opt.train(key,STEPS)
+    _, log = opt.train(key,STEPS,True)
     
-    perf = [e['J'] for e in log]
-    plt.plot(perf)
+    """Plotting the results"""
+    i = [e['iter'] for e in log]
+    j = [e['J'] for e in log]
+    plt.plot(i,j)
     plt.show()
     
     
