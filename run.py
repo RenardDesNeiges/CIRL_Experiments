@@ -6,13 +6,13 @@ import matplotlib.pyplot as plt
 
 from env.gridworld import Gridworld
 from algs.opt import Optimizer, initDirectPG
-from algs.grads import vanillaGradOracle
+from algs.grads import naturalGradOracle
 from algs.returns import J
 
 def main():
     key = jax.random.PRNGKey(0) 
     
-    LR = 1
+    LR = 5e-3
     STEPS = 20
     
     """Defining an MDP"""
@@ -24,7 +24,7 @@ def main():
     """Defining the relevant function"""
     pFun = lambda p : nn.softmax(p,axis=1) # policy function
     init = initDirectPG(key,gridMDP)
-    pGrad = vanillaGradOracle(J,gridMDP,pFun,lambda x:x, None)
+    pGrad = naturalGradOracle(J,gridMDP,pFun,lambda x:x, None)
     def grad(batch,p):
         _pg = pGrad(batch,p)
         _rg = jnp.zeros_like(p['reward'])

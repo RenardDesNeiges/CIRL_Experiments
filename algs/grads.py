@@ -3,9 +3,7 @@ from jax import numpy as jnp
 from jax.numpy import linalg as jla
 import jax.nn as nn
 
-from typing import Callable
-from itertools import accumulate
-from tqdm import tqdm
+from typing import Callable, Any, Dict, List
 
 from env.mdp import MarkovDecisionProcess
 from algs.utils import flatten
@@ -24,7 +22,8 @@ def vanillaGradOracle(  J:Callable,
                         mdp:MarkovDecisionProcess,
                         pFun:Callable,
                         rFun:Callable,
-                        reg:Callable):
+                        reg:Callable
+                        )->Callable[[List[Any],Dict[str,jnp.ndarray]],jnp.ndarray]:
     """ Generates a (vanilla) policy gradient oracle function for some mdp,
         policy parametrization and reward function, supports regularized
         functions.
@@ -35,33 +34,79 @@ def vanillaGradOracle(  J:Callable,
         pFun (Callable): Policy parametrization.
         rFun (Callable): Reward parametetrization.
         reg (Callable): regularizer.
+
+    Returns:
+        Callable[[List[Any],Dict[str,jnp.ndarray]],jnp.ndarray]: the gradient function.
     """
     def grad_function(b,p):
+        _ = b
         reward = rFun(p['reward'])
         grad = jax.grad(
             lambda theta: J(mdp,pFun(theta),reward,reg)
             )
-        grad = jax.jit(grad)
+        grad = grad
         return grad(p['policy'])
     
-    return grad_function
+    return jax.jit(grad_function)
 
-def exact_fim_oracle(self,theta,parametrization):
-    # TODO write a docstring
-    # TODO move to grads
-    v = jax.jacfwd(lambda p : flatten(jnp.log(parametrization(p))))(theta) # computing the jacobian (step 1)
-    jac = jnp.reshape(v,(self.n*self.m,self.n*self.m)) # flatten last two dimensions (step 1)
+def exact_fim_oracle(mdp: MarkovDecisionProcess,pFun : Callable, _p:jnp.array)->jnp.ndarray:
+    """Computes the exact FIM for some policy parameters and parameterization on some MDP.
+
+    Args:
+        mdp (MarkovDecisionProcess): the mdp.
+        pFun (Callable): the policy parametrization.
+        _p (jnp.array): the policy parameters.
+        
+    Returns:
+        jnp.ndarray: the FIM.
+    """
+    v = jax.jacfwd(lambda p : flatten(jnp.log(pFun(p))))(_p) # computing the jacobian (step 1)
+    jac = jnp.reshape(v,(mdp.n*mdp.m,mdp.n*mdp.m)) # flatten last two dimensions (step 1)
     bop = jnp.einsum('bi,bj->bji',jac,jac) # batch outer-product (step 2)
     return jnp.einsum('bij,b->ij',bop,
-                        flatten(self.occ_measure(parametrization(theta)))) # fisher information matrix (I hope) (step 3)
+                        flatten(mdp.occ_measure(pFun(_p)))) # fisher information matrix (I hope) (step 3)
 
-def naturalGradOracle(mdp,sampler,key,parametrization,B,H,reg=None):
-    def naturalGrad(theta):
-        _shape = theta.shape
-        g = jax.grad(lambda p : mdp.J(parametrization(p),reg))(theta)    
-        f_inv = jla.pinv(mdp.exact_fim_oracle(theta,lambda p:nn.softmax(p,axis=1)))
+
+def naturalGradOracle(  J:Callable,
+                        mdp:MarkovDecisionProcess,
+                        pFun:Callable,
+                        rFun:Callable,
+                        reg:Callable
+                        )->Callable[[List[Any],Dict[str,jnp.ndarray]],jnp.ndarray]:
+    """ Generates a natural policy gradient oracle function for some mdp,
+        policy parametrization and reward function, supports regularized
+        functions.
+
+    Args:
+        J (Callable): Return function.
+        mdp (MarkovDecisionProcess): MDP to compute the grad on.
+        pFun (Callable): Policy parametrization.
+        rFun (Callable): Reward parametetrization.
+        reg (Callable): regularizer.
+
+    Returns:
+        Callable[[List[Any],Dict[str,jnp.ndarray]],jnp.ndarray]: the gradient function.
+    """
+    def grad_function(b,p):
+        _ = b
+        _shape = p['policy'].shape
+        reward = rFun(p['reward'])
+        grad = jax.grad(
+            lambda theta: J(mdp,pFun(theta),reward,reg)
+            )
+        f_inv = jla.pinv(exact_fim_oracle(mdp,pFun, p['policy']))
+        g = grad(p['policy'])
         return jnp.reshape(f_inv@flatten(g),_shape)
-    return jax.jit(naturalGrad)
+    
+    return jax.jit(grad_function)
+
+# def naturalGradOracle(mdp,sampler,key,parametrization,B,H,reg=None):
+#     def naturalGrad(theta):
+#         _shape = theta.shape
+#         g = jax.grad(lambda p : mdp.J(parametrization(p),reg))(theta)    
+#         f_inv = jla.pinv(mdp.exact_fim_oracle(theta,lambda p:nn.softmax(p,axis=1)))
+#         return jnp.reshape(f_inv@flatten(g),_shape)
+#     return jax.jit(naturalGrad)
 
 """Stochastic gradients"""
 
