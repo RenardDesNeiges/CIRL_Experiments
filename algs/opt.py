@@ -73,19 +73,23 @@ class Optimizer():
 """Policy gradient related functions"""
 #TODO: move to the policy-gradient module
 
-def policyInit():
-    # computes an initial policy value
-    return ...
+def initDirectPG(   k: jax.random.KeyArray,
+                    mdp:MarkovDecisionProcess):
+    """Initializes direct policy gradient parameters.
 
-def policyGrad(grad):
-    # compute the policy gradient (uses mdp knowledge, reward, lagrangian etc.)
-    # clip the gradients 
-    return grad
-
-def policy_proc(grad):
-    # apply learning rate
-    # clip the gradients 
-    return grad
+    Args:
+        k (jax.random.KeyArray): jax PRNG key
+        mdp (MarkovDecisionProcess): MDP
+    """
+    def init(k):
+        p = jax.random.uniform(k,(mdp.n,mdp.m))
+        r = mdp.R
+        return {
+            'policy': p,
+            'reward': r,
+        }
+        
+    return lambda : init(k)
 
 """Specific implementation of algorithms using the generic optimizer"""
 

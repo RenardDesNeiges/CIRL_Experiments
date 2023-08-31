@@ -3,18 +3,48 @@ from jax import numpy as jnp
 from jax.numpy import linalg as jla
 import jax.nn as nn
 
+from typing import Callable
 from itertools import accumulate
 from tqdm import tqdm
 
-from env.mdp import MarkovDecisionProcess, Sampler
+from env.mdp import MarkovDecisionProcess
 from algs.utils import flatten
 
 CLIP_THRESH = 1e3
 
-"""Exact gradient oracles"""
+"""Exact gradient oracles
+--> all gradient functions have the prototype 
+f: (batch [Array],  parameters [Dict of jnp.arrays]) --> grad [jnp.array]
 
-def vanillaGradOracle(mdp,sampler,key,parametrization,B,H,reg=None):
-    return jax.jit(jax.grad(lambda p : mdp.J(parametrization(p),reg)))
+BUUUUT, the functions here are generators that return functions with that prototype, so they might take something else
+
+"""
+
+def vanillaGradOracle(  J:Callable,
+                        mdp:MarkovDecisionProcess,
+                        pFun:Callable,
+                        rFun:Callable,
+                        reg:Callable):
+    """ Generates a (vanilla) policy gradient oracle function for some mdp,
+        policy parametrization and reward function, supports regularized
+        functions.
+
+    Args:
+        J (Callable): Return function.
+        mdp (MarkovDecisionProcess): MDP to compute the grad on.
+        pFun (Callable): Policy parametrization.
+        rFun (Callable): Reward parametetrization.
+        reg (Callable): regularizer.
+    """
+    def grad_function(b,p):
+        reward = rFun(p['reward'])
+        grad = jax.grad(
+            lambda theta: J(mdp,pFun(theta),reward,reg)
+            )
+        grad = jax.jit(grad)
+        return grad(p['policy'])
+    
+    return grad_function
 
 def exact_fim_oracle(self,theta,parametrization):
     # TODO write a docstring
