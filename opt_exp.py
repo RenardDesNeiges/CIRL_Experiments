@@ -22,7 +22,7 @@ def main():
 
     pFun = lambda p : nn.softmax(p,axis=1) # policy function
     init = lambda : {'policy': jax.random.uniform(key,(gridMDP.n,gridMDP.m))}
-    grad = lambda p : jax.jit(jax.grad(lambda p : gridMDP.J(pFun(p['policy']))))(p)
+    grad = lambda _, p : jax.jit(jax.grad(lambda p : gridMDP.J(pFun(p['policy']))))(p)
     proc = lambda g : {'policy': LR*g['policy']}
     
     def logger( params, grads, step, i):

@@ -7,7 +7,7 @@ from itertools import accumulate
 from tqdm import tqdm
 
 from typing import Callable, Any, Dict, Tuple, List
-from env.mdp import MarkovDecisionProcess
+from env.mdp import MarkovDecisionProcess, Sampler
 
 """
 
@@ -62,7 +62,8 @@ class Optimizer():
         x   = self.init()                   # initialize the parameters somewhere
         log = []
         for i in tqdm(range(steps),disable=(not pbar)):
-            _g = self.grad(x)               # compute gradients
+            key, sk = jax.random.split(key)
+            _g = self.grad(sk, x)           # compute gradients
             _s = self.proc(_g)              # process the gradients into a step
             log += [self.log(x,_g,_s,i)]    # log the parameters, gradients, step and iter-count
             x = {k:x[k]+v for k, v in _s.items()}     # take the step
@@ -88,12 +89,14 @@ def policy_proc(grad):
 """Specific implementation of algorithms using the generic optimizer"""
 
 def PGAlgorithm(    mdp:                MarkovDecisionProcess,
+                    sampler:            Sampler, 
                     policyFunction:     Callable,
                     regularizer:        Callable,
                     gradientEstimator:  Callable,
                     reward:             jnp.ndarray,
                     policyLR:           float,
-                    init_theta:         jnp.ndarray                 = None,
+                    init_theta:         jnp.ndarray = None,
+                    logger:             jnp.ndarray = defaultLogger,
                     ):
     
     
@@ -101,7 +104,11 @@ def PGAlgorithm(    mdp:                MarkovDecisionProcess,
     
     init = lambda :     {'policy': policyInit()}
     proc = lambda g :   {'policy': policyLR*g['policy']}
-    grad = lambda p :   {'policy': policyGrad(p)}
+    def grad(key,p):
+        if sampler is None: batch = None
+        else:               batch = sampler.sample(key,p)
+        return {'policy': policyGrad(p,batch)}
+
     proc = lambda g :   {'policy': policy_proc(g['policy'])}
     
     opt = Optimizer(init=init,grad=grad,proc=proc,log=logger)
