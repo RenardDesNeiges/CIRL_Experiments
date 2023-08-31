@@ -12,9 +12,9 @@ CLIP_THRESH = 1e3
 
 """Exact gradient oracles
 --> all gradient functions have the prototype 
-f: (batch [Array],  parameters [Dict of jnp.arrays]) --> grad [jnp.array]
+f: (batch [Array],  parameters [Dict of jnp.arrays]) -> grad [jnp.array]
 
-BUUUUT, the functions here are generators that return functions with that prototype, so they might take something else
+BUUUUT, the functions here are generators that return functions with that prototype, so they themselves have a different prototype
 
 """
 
@@ -99,14 +99,6 @@ def naturalGradOracle(  J:Callable,
         return jnp.reshape(f_inv@flatten(g),_shape)
     
     return jax.jit(grad_function)
-
-# def naturalGradOracle(mdp,sampler,key,parametrization,B,H,reg=None):
-#     def naturalGrad(theta):
-#         _shape = theta.shape
-#         g = jax.grad(lambda p : mdp.J(parametrization(p),reg))(theta)    
-#         f_inv = jla.pinv(mdp.exact_fim_oracle(theta,lambda p:nn.softmax(p,axis=1)))
-#         return jnp.reshape(f_inv@flatten(g),_shape)
-#     return jax.jit(naturalGrad)
 
 """Stochastic gradients"""
 

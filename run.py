@@ -2,17 +2,77 @@ import jax
 from jax import numpy as jnp
 import jax.nn as nn
 
+from typing import Callable
+
 import matplotlib.pyplot as plt
 
+from env.mdp import MarkovDecisionProcess
 from env.gridworld import Gridworld
-from algs.opt import Optimizer, initDirectPG
-from algs.grads import naturalGradOracle
+from algs.opt import Optimizer
+from algs.grads import vanillaGradOracle, naturalGradOracle
 from algs.returns import J
 
+def initDirectPG(   k: jax.random.KeyArray,
+                    mdp:MarkovDecisionProcess)->Callable:
+    """Initializes direct policy gradient parameters.
+
+    Args:
+        k (jax.random.KeyArray): jax PRNG key
+        mdp (MarkovDecisionProcess): MDP
+    """
+    def init(k):
+        p = jax.random.uniform(k,(mdp.n,mdp.m))
+        r = mdp.R
+        return {
+            'policy': p,
+            'reward': r,
+        }
+        
+    return lambda : init(k)
+
+def exactVanillaPG( J:Callable,
+                    mdp:MarkovDecisionProcess,
+                    pFun:Callable,
+                    rFun:Callable,
+                    reg:Callable)->Callable:
+    pGrad = vanillaGradOracle(J,mdp,pFun,rFun, reg)
+    def grad(batch,p):
+        _pg = pGrad(batch,p)
+        _rg = jnp.zeros_like(p['reward'])
+        return {
+            'policy' : _pg,
+            'reward' : _rg,
+        }
+    return grad
+
+def exactNaturalPG( J:Callable,
+                    mdp:MarkovDecisionProcess,
+                    pFun:Callable,
+                    rFun:Callable,
+                    reg:Callable)->Callable:
+    pGrad = naturalGradOracle(J,mdp,pFun,rFun, reg)
+    def grad(batch,p):
+        _pg = pGrad(batch,p)
+        _rg = jnp.zeros_like(p['reward'])
+        return {
+            'policy' : _pg,
+            'reward' : _rg,
+        }
+    return grad
+
+def pgClipProcessor(plr:float,ct:float)->Callable:
+    def proc(g):
+        return {
+            'policy': jnp.clip(plr*g['policy'],a_min=-ct,a_max=ct), 
+            'reward': g['reward'], # not learning, just implement identity
+            }
+    return proc
+    
+    
 def main():
     key = jax.random.PRNGKey(0) 
     
-    LR = 5e-3
+    LR = 1
     STEPS = 20
     
     """Defining an MDP"""
@@ -22,18 +82,13 @@ def main():
         jnp.sum(jnp.exp(jax.random.uniform(key,(gridMDP.n,))))
 
     """Defining the relevant function"""
-    pFun = lambda p : nn.softmax(p,axis=1) # policy function
-    init = initDirectPG(key,gridMDP)
-    pGrad = naturalGradOracle(J,gridMDP,pFun,lambda x:x, None)
-    def grad(batch,p):
-        _pg = pGrad(batch,p)
-        _rg = jnp.zeros_like(p['reward'])
-        return {
-            'policy' : _pg,
-            'reward' : _rg,
-        }
-        
-    proc = lambda g : {'policy': LR*g['policy'], 'reward': g['reward']}
+    pFun = lambda p : nn.softmax(p,axis=1)  # policy function
+    rFun = lambda r : r                     # reward function
+    reg = None                              # regularizer function (or lack thereof)
+    
+    init = initDirectPG(key,gridMDP)                # init function
+    grad = exactVanillaPG(J,gridMDP,pFun,rFun,reg)     # gradient function
+    proc = pgClipProcessor(LR,1e3)
     
     """Defining the logger"""
     def logger( params, grads, step, i):

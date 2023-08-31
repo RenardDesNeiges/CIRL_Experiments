@@ -71,25 +71,7 @@ class Optimizer():
         return x, log
 
 """Policy gradient related functions"""
-#TODO: move to the policy-gradient module
 
-def initDirectPG(   k: jax.random.KeyArray,
-                    mdp:MarkovDecisionProcess):
-    """Initializes direct policy gradient parameters.
-
-    Args:
-        k (jax.random.KeyArray): jax PRNG key
-        mdp (MarkovDecisionProcess): MDP
-    """
-    def init(k):
-        p = jax.random.uniform(k,(mdp.n,mdp.m))
-        r = mdp.R
-        return {
-            'policy': p,
-            'reward': r,
-        }
-        
-    return lambda : init(k)
 
 """Specific implementation of algorithms using the generic optimizer"""
 
