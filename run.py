@@ -87,10 +87,10 @@ def getExpertPolicy(mdp,key,beta):
 def main_irl():
     key = jax.random.PRNGKey(0) 
     
-    PLR = 1
-    RLR = 1e1
+    PLR = 2e-3
+    RLR = 1e3
     CLIP_THRESH = 5e2
-    STEPS = 400
+    STEPS = 800
     W_RADIUS = 1
     BETA = 3
     
@@ -113,7 +113,7 @@ def main_irl():
     reg = lambda p : BETA * shannonEntropy(p)
 
     init = initDirectIRL(key,gridMDP)                   # init function
-    grad = exactVanillaIRL(L,gridMDP,pFun,rFun,reg)      # gradient function 
+    grad = exactNaturalIRL(L,gridMDP,pFun,rFun,reg)      # gradient function 
     proc = irlClipProcessor(PLR,RLR,CLIP_THRESH)        # gradient processing
     proj = irlL2Proj(W_RADIUS)
 

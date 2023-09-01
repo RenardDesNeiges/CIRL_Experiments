@@ -8,7 +8,7 @@ from env.mdp import MarkovDecisionProcess
 from env.sample import Sampler
 from algs.utils import flatten
 from algs.projs import euclidean_l2ball
-from algs.grads import vanillaGradOracle, rewardGradOracle
+from algs.grads import vanillaGradOracle, rewardGradOracle, naturalGradOracle
 
 
 
@@ -40,6 +40,24 @@ def exactVanillaIRL( J:Callable,
                     rFun:Callable,
                     reg:Callable)->Callable:
     pGrad = vanillaGradOracle(J,mdp,pFun,rFun, reg)
+    rGrad = rewardGradOracle(J,mdp,pFun,rFun,reg)
+    def grad(key,p):
+        _ = key
+        _pg = pGrad(p)
+        _rg = rGrad(p)
+        return {
+            'policy' : _pg,
+            'reward' : _rg,
+        }
+    return grad
+
+"""Gradient computation wrappers"""
+def exactNaturalIRL(J:Callable,
+                    mdp:MarkovDecisionProcess,
+                    pFun:Callable,
+                    rFun:Callable,
+                    reg:Callable)->Callable:
+    pGrad = naturalGradOracle(J,mdp,pFun,rFun, reg)
     rGrad = rewardGradOracle(J,mdp,pFun,rFun,reg)
     def grad(key,p):
         _ = key
