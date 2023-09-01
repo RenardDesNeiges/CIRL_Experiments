@@ -43,7 +43,6 @@ def vanillaGradOracle(  J:Callable,
         grad = jax.grad(
             lambda theta: J(mdp,pFun(theta),reward,reg)
             )
-        grad = grad
         return grad(p['policy'])
     
     return jax.jit(grad_function)
@@ -95,6 +94,33 @@ def naturalGradOracle(  J:Callable,
         f_inv = jla.pinv(exactFIMOracle(mdp,pFun, p['policy']))
         g = grad(p['policy'])
         return jnp.reshape(f_inv@flatten(g),_shape)
+    
+    return jax.jit(grad_function)
+
+
+def rewardGradOracle(   J:Callable,
+                        mdp:MarkovDecisionProcess,
+                        pFun:Callable,
+                        rFun:Callable,
+                        reg:Callable
+                        )->Callable[[Dict[str,jnp.ndarray]],jnp.ndarray]:
+    """ Generates a reward gradient oracle function for some mdp,
+        policy parametrization and reward function, supports regularized
+        functions.
+
+    Args:
+        J (Callable): Return function.
+        mdp (MarkovDecisionProcess): MDP to compute the grad on.
+        pFun (Callable): Policy parametrization.
+        rFun (Callable): Reward parametetrization.
+        reg (Callable): regularizer.
+
+    Returns:
+        Callable[[Dict[str,jnp.ndarray]],jnp.ndarray]: the gradient function.
+    """
+    def grad_function(p):
+        policy = pFun(p['policy'])
+        return jax.grad(lambda w : J(mdp,policy,rFun(w),reg))(p['reward'])
     
     return jax.jit(grad_function)
 

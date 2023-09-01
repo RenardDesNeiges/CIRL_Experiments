@@ -33,7 +33,8 @@ class Optimizer():
     def __init__(self,  init:   Callable[[None],Dict], 
                         log:    Callable[[Dict,Dict,Dict,int],Dict], 
                         grad:   Callable[[None],Dict], 
-                        proc:   Callable[[Dict],Dict]) -> None:
+                        proc:   Callable[[Dict],Dict],
+                        proj:   Callable[[Dict],Dict]) -> None:
         """ Generic class that provides a basic structure to the implementation of any (!)
             first order optimization procedure.
 
@@ -47,6 +48,7 @@ class Optimizer():
         self.log    = log
         self.grad   = grad
         self.proc   = proc
+        self.proj   = proj
         
         
     def train(self,key:jax.random.KeyArray,steps:int,pbar:bool=False)->Tuple[Dict[str,Any],List[Dict[str,Any]]]:
@@ -60,7 +62,7 @@ class Optimizer():
         Returns:
             Tuple[Dict[str,Any],List[Dict[str,Any]]]: The optimized parameters and a log of training (containing the outputs of the logger function)
         """
-        x   = self.init()                   # initialize the parameters somewhere
+        x   = self.proj(self.init())                   # initialize the parameters somewhere
         log = []
         for i in tqdm(range(steps),disable=(not pbar)):
             key, sk = jax.random.split(key)
@@ -68,49 +70,5 @@ class Optimizer():
             _s = self.proc(_g)              # process the gradients into a step
             log += [self.log(x,_g,_s,i)]    # log the parameters, gradients, step and iter-count
             x = {k:x[k]+v for k, v in _s.items()}     # take the step
+            x = self.proj(x)
         return x, log
-
-"""Policy gradient related functions"""
-
-
-"""Specific implementation of algorithms using the generic optimizer"""
-
-def PGAlgorithm(    mdp:                MarkovDecisionProcess,
-                    sampler:            Sampler, 
-                    policyFunction:     Callable,
-                    regularizer:        Callable,
-                    gradientEstimator:  Callable,
-                    reward:             jnp.ndarray,
-                    policyLR:           float,
-                    init_theta:         jnp.ndarray = None,
-                    logger:             jnp.ndarray = defaultLogger,
-                    ):
-    
-    
-    policy_gradient = lambda x : x # TODO : implement a standard signature for policy grad estimators (with rewards and lagrangian multipliers)
-    
-    init = lambda :     {'policy': policyInit()}
-    proc = lambda g :   {'policy': policyLR*g['policy']}
-    def grad(key,p):
-        if sampler is None: batch = None
-        else:               batch = sampler.sample(key,p)
-        return {'policy': policyGrad(p,batch)}
-
-    proc = lambda g :   {'policy': policy_proc(g['policy'])}
-    
-    opt = Optimizer(init=init,grad=grad,proc=proc,log=logger)
-
-def IRLAlgorithm(   mdp:                MarkovDecisionProcess,
-                    policyFunction:     Callable,
-                    rewardFunction:     Callable,
-                    regularizer:        Callable,
-                    pgEstimator:        Callable,
-                    rgEstimator:        Callable,
-                    reward:             jnp.ndarray,
-                    policyLR:           float,
-                    rewardLR:           float,
-                    initTheta:          jnp.ndarray                 = None,
-                    initW:              jnp.ndarray                 = None,
-                    logger:             Callable                    = defaultLogger,
-                    ):
-    pass
