@@ -31,7 +31,7 @@ def J(  m:MarkovDecisionProcess,
     J -= reg_term
     return  J
 
-def IRLLagrangian(  expert:jnp.ndarray,
+def IRLLagrangian(  expert:jnp.ndarray, returnFunction:Callable = J,
         )->Callable:
     """Produces the IRL lagrangian function associated with some expert policy.
 
@@ -41,7 +41,7 @@ def IRLLagrangian(  expert:jnp.ndarray,
     Returns:
         Callable: the lagrangian function.
     """
-    L = lambda m,p,r,reg : (J(m,p,r,reg) - J(m,expert,r,reg))
+    L = lambda m,p,r,reg : (returnFunction(m,p,r,reg) - returnFunction(m,expert,r,reg))
     return L 
 
 # TODO: defined the CIRL lagrangian

@@ -39,7 +39,6 @@ def euclidean_simplex(v, s=1):
     w = (v - theta).clip(min=0)
     return jnp.reshape(w,sh)
 
-
 def euclidean_l1ball(v, s=1):
     """ Compute the Euclidean projection on a L1-ball
     Solves the optimisation problem (using the algorithm from [1]):
