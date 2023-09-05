@@ -34,7 +34,7 @@ class ExampleMDPs(ABC):
     @abstractmethod
     def gworld1(reward_class:str='L2')->MarkovDecisionProcess:
         key = jax.random.PRNGKey(1)
-        R = 100; P = -300; 
+        R = 1; P = -2; 
         goals = [((2,0),R)]
         mdp = Gridworld(3,3,0.1,0.9,goals=goals,obstacles=[]) 
         key, sk = jax.random.split(key)
@@ -47,8 +47,8 @@ class ExampleMDPs(ABC):
     @abstractmethod
     def gworld2(reward_class:str='L2')->MarkovDecisionProcess:
         key = jax.random.PRNGKey(1)
-        R = 100; P = -300; 
-        R = 100; P = -300; goals = [((2,0),R),((1,0),P),((1,1),P)]
+        R = 1; P = -2; 
+        R = 1; P = -2; goals = [((2,0),R),((1,0),P),((1,1),P)]
         mdp = Gridworld(3,3,0.1,0.9,goals=goals,obstacles=[]) 
         mdp.init_distrib =  jnp.exp(jax.random.uniform(key,(mdp.n,))) / \
             jnp.sum(jnp.exp(jax.random.uniform(key,(mdp.n,))))
