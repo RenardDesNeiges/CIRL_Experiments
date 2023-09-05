@@ -6,6 +6,8 @@ from jax.config import config; config.update("jax_enable_x64", True)
 
 from typing import Callable
 
+import matplotlib.pyplot as plt
+
 from env.mdp import MarkovDecisionProcess
 from algs.utils import shannonEntropy
 from algs.returns import J as Jfunction, IRLLagrangian
@@ -13,6 +15,8 @@ from algs.irl import initDirectIRL, exactNaturalIRL, irlClipProcessor, irlL2Proj
 from algs.pg import initDirectPG, exactNaturalPG, pgClipProcessor
 from algs.metrics import policyReconstructionError, normalizedRewardError
 from algs.opt import Optimizer
+
+from abc import ABC, abstractmethod
 
 # TODO : replace this with the PG trainer maybe
 def getExpertPolicy(    key:jax.random.KeyArray,
@@ -95,13 +99,16 @@ class IRL_Trainer():
         proj = irlL2Proj(self.w_radius)
 
         """Defining the metrics functions"""
-        pre = policyReconstructionError
-        nre = normalizedRewardError
+        pre = policyReconstructionError(self.expertPolicy)
+        nre = normalizedRewardError(self.mdp.R)
 
         """Defining the logger"""
         def logger( params, grads, step, i):
             return {
-                'L'         : L(self.mdp,self.pFun(params['policy']),self.rFun(params['reward']),self.reg), 
+                'L'         : L(self.mdp,
+                                self.pFun(params['policy']),
+                                self.rFun(params['reward']),
+                                self.reg), 
                 'PRE'       : pre(self.pFun(params['policy'])),
                 'NRE'       : nre(self.rFun(params['reward'])),
                 'params'    : params,
@@ -116,3 +123,24 @@ class IRL_Trainer():
         optimizers, trace = opt.train(self.key,stepcount,pbar)
         
         return optimizers, trace
+    
+class TracePlotter(ABC):
+    @abstractmethod
+    def plotScalar(ax,key,trace,title=None):
+        iters = [e['iter'] for e in trace]
+        ls = [e[key] for e in trace]
+        ax.plot(iters,ls)
+        if title is None:
+            ax.set_title(key)
+        else:
+            ax.set_title(title)
+
+    @abstractmethod
+    def plotGradNorms(ax,key,trace,title=None):
+        iters = [e['iter'] for e in trace]
+        gnorm = [jla.norm(e['grads'][key]) for e in trace]
+        ax.plot(iters,gnorm)
+        if title is None:
+            ax.set_title(f'{key} gradient norms')
+        else:
+            ax.set_title(title)
