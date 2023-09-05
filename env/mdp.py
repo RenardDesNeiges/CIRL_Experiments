@@ -5,39 +5,6 @@ from jax.numpy import linalg as jla
 from einops import repeat
 from itertools import accumulate
 
-""" Useful helper functions """
-def flatten(v):
-    return jnp.reshape(v,(list(accumulate(v.shape,lambda x,y:x*y))[-1],))
-
-class Sampler():
-    def __init__(self, MDP, key) -> None:
-        self.MDP : MarkovDecisionProcess = MDP
-        self.s_t :int = None
-        self.key = key
-        
-    def _get_subkey(self):
-        key, subkey = jax.random.split(self.key)
-        self.key = key
-        return subkey
-        
-    def reset(self, s_0: int = None):
-        _key = self._get_subkey()
-        if not s_0:
-            p = self.MDP.init_distrib.astype('float64')
-            p /= jnp.sum(p)
-            self.s_t = jax.random.choice(_key,jnp.arange(self.MDP.n), p = p)
-        else: 
-            self.s_t = s_0
-        return self.s_t # sets the initial state to 
-    
-    def step(self, action:int):
-        _key = self._get_subkey()
-        reward = self.MDP.R[self.s_t,action]
-        p = self.MDP.P_sa[self.s_t,action,:].astype('float64')
-        p /= jnp.sum(p)
-        self.s_t = jax.random.choice(_key,jnp.arange(self.MDP.n), p = p)
-        return self.s_t, reward
-
 class MarkovDecisionProcess():
     def __init__(self,
             n  :int, 
@@ -78,6 +45,8 @@ class MarkovDecisionProcess():
         Returns:
             jnp.ndarray: n-sized array containing the state occupancy measure
         """
+        if self.n == 1:
+            return jnp.array([1.])
         P_pi = self.closed_loop_kernel(pi)
         return (1-self.gamma)*(jla.inv((jnp.eye(self.n)-self.gamma*P_pi)).transpose()@self.init_distrib)
 
@@ -92,21 +61,6 @@ class MarkovDecisionProcess():
         """
         mu_s = self.state_occ_measure(pi)
         return pi * repeat(mu_s, 's -> s new_axis', new_axis=self.m)
-
-    def J(self,pi, regularizer = None, reward=None): 
-        # TODO write a docstring
-        if reward is None: reward = self.R
-        if regularizer is None: reg_term = 0
-        else:  reg_term = jnp.dot(jax.vmap(regularizer)(pi),self.state_occ_measure(pi))
-        return jnp.dot(flatten(reward),flatten(self.occ_measure(pi))) - reg_term
-
-    def exact_fim_oracle(self,theta,parametrization):
-        # TODO write a docstring
-        v = jax.jacfwd(lambda p : flatten(jnp.log(parametrization(p))))(theta) # computing the jacobian (step 1)
-        jac = jnp.reshape(v,(self.n*self.m,self.n*self.m)) # flatten last two dimensions (step 1)
-        bop = jnp.einsum('bi,bj->bji',jac,jac) # batch outer-product (step 2)
-        return jnp.einsum('bij,b->ij',bop,
-                          flatten(self.occ_measure(parametrization(theta)))) # fisher information matrix (I hope) (step 3)aa
 
     def next_state_distribution(self, s:int, a:int)->jnp.ndarray:
         """Given a fixed state-action pair, gives the distribution on the next state.
