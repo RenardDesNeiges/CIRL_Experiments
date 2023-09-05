@@ -45,6 +45,8 @@ class MarkovDecisionProcess():
         Returns:
             jnp.ndarray: n-sized array containing the state occupancy measure
         """
+        if self.n == 1:
+            return jnp.array([1.])
         P_pi = self.closed_loop_kernel(pi)
         return (1-self.gamma)*(jla.inv((jnp.eye(self.n)-self.gamma*P_pi)).transpose()@self.init_distrib)
 

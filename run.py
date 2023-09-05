@@ -23,7 +23,7 @@ def main_pg():
     STEPS = 30
     BATCH = 40
     HORIZON = 20
-    BETA = 2
+    BETA = 15
     
     """Defining an MDP"""
     R = 100; P = -300; goals = [((2,0),R),((1,0),P),((1,1),P)]
@@ -37,7 +37,7 @@ def main_pg():
     """Defining the relevant function"""
     pFun = lambda p : nn.softmax(p,axis=1)  # policy function
     rFun = lambda r : r                     # reward function
-    reg = lambda p : BETA * shannonEntropy(p)
+    reg  = lambda p : - BETA * shannonEntropy(p)
     
     init = initDirectPG(key,gridMDP)                    # init function
     # grad = stochNaturalPG(J,gridMDP,smp,pFun,rFun,reg)      # gradient function
@@ -74,7 +74,7 @@ def getExpertPolicy(mdp,key,beta):
     STEPS = 40
     pFun = lambda p : nn.softmax(p,axis=1)  # policy function
     rFun = lambda r : r                     # reward function
-    reg = lambda p : beta * shannonEntropy(p)
+    reg = lambda p : - beta * shannonEntropy(p)
     
     init = initDirectPG(key,mdp)                    # init function
     grad = exactNaturalPG(J,mdp,pFun,rFun,reg)      # gradient function
@@ -87,12 +87,12 @@ def getExpertPolicy(mdp,key,beta):
 def main_irl():
     key = jax.random.PRNGKey(0) 
     
-    PLR = 2e-3
-    RLR = 1e3
-    CLIP_THRESH = 5e2
+    PLR = 5e-3
+    RLR = 1e-2
+    CLIP_THRESH = 5e6
     STEPS = 800
     W_RADIUS = 1
-    BETA = 3
+    BETA = 10
     
     """Defining an MDP"""
     R = 100; P = -300; 
@@ -110,10 +110,10 @@ def main_irl():
     """Defining the relevant function"""
     pFun = lambda p : nn.softmax(p,axis=1)  # policy function
     rFun = lambda r : r                     # reward function (for now we just parametrize directly)
-    reg = lambda p : BETA * shannonEntropy(p)
+    reg = lambda p : -BETA * shannonEntropy(p)
 
     init = initDirectIRL(key,gridMDP)                   # init function
-    grad = exactNaturalIRL(L,gridMDP,pFun,rFun,reg)      # gradient function 
+    grad = exactNaturalIRL(L,gridMDP,pFun,rFun,reg)     # gradient function 
     proc = irlClipProcessor(PLR,RLR,CLIP_THRESH)        # gradient processing
     proj = irlL2Proj(W_RADIUS)
 

@@ -7,7 +7,7 @@ from typing import Callable
 from env.mdp import MarkovDecisionProcess
 from env.sample import Sampler
 from algs.utils import flatten
-from algs.projs import euclidean_l2ball
+from algs.projs import euclidean_l1ball, euclidean_l2ball
 from algs.grads import vanillaGradOracle, rewardGradOracle, naturalGradOracle
 
 
@@ -87,6 +87,7 @@ def irlClipProcessor(plr:float,rlr:float,ct:float)->Callable:
 """Projection operations"""
 def irlL2Proj(r:float)->Callable:
     def proj(x):
+        # x['policy']=euclidean_l1ball(x['policy'],1) # ensure this is a distribution
         x['reward']=euclidean_l2ball(x['reward'],r)
         return x
     return proj

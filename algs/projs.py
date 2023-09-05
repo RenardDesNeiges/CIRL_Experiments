@@ -70,7 +70,7 @@ def euclidean_l1ball(v, s=1):
     # check if v is already a solution
     if u.sum() <= s:
         # L1-norm is <= s
-        return v
+        return jnp.reshape(v,sh)
     # v is not already a solution: optimum lies on the boundary (norm == s)
     # project *u* on the simplex
     w = euclidean_simplex(u, s=s)
@@ -91,9 +91,8 @@ def euclidean_l2ball(v, s=1):
        Euclidean projection of v on the L1-ball of radius s
     """
     assert s > 0, "Radius s must be strictly positive (%d <= 0)" % s
-
     norm = jla.norm(v)
-    if norm < s: return jnp.reshape(v,sh)
+    if norm < s: return v
     return v*(s/norm)
 
 def euclidian_pos_orthant(v,):
