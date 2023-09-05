@@ -4,9 +4,7 @@ from jax.numpy import linalg as jla
 import jax.nn as nn
 from jax.config import config; config.update("jax_enable_x64", True)
 
-from typing import Callable
-
-import matplotlib.pyplot as plt
+from typing import Callable, Any, Dict, List, Tuple
 
 from env.mdp import MarkovDecisionProcess
 from algs.utils import shannonEntropy
@@ -51,31 +49,79 @@ class IRL_Trainer():
                         expertPolicy: jnp.ndarray=None,
                         key:jax.random.KeyArray=None, 
                         expertTrainer: Callable = getExpertPolicy,
+                        lagrangian: Callable = IRLLagrangian,
+                        init_params: Callable = initDirectIRL,
+                        gradients: Callable = exactNaturalIRL,
+                        grad_proc: Callable = irlClipProcessor,
+                        proj: Callable = irlL2Proj,
                         ) -> None:
+        """Trainer class for inverse reinforcement learning problems.
 
+        Args:
+            mdp (MarkovDecisionProcess): mdp to optimize on.
+            policy_lr (float, optional): policy learning rate. Defaults to 2e-3.
+            reward_lr (float, optional): reward learning rate. Defaults to 1.
+            clip_thresh (float, optional): reward gradient clipping threshold. Defaults to 5e2.
+            w_radius (float, optional): reward class radius. Defaults to 1.
+            beta (float, optional): regularization factor. Defaults to 5.
+            pFun (_type_, optional): policy parameterization. Defaults to lambdap:nn.softmax(p,axis=1).
+            rFun (_type_, optional): reward parameterization. Defaults to lambdar:r.
+            reg (Callable, optional): regularizer function. Defaults to shannonEntropy.
+            ret (Callable, optional): return function. Defaults to J.
+            expertPolicy (jnp.ndarray, optional): expert policy. Defaults to None (and if none trains its own expert policy).
+            key (jax.random.KeyArray, optional): pseudorandom key. Defaults to None.
+            expertTrainer (Callable, optional): expert trainig function. Defaults to getExpertPolicy.
+            lagrangian (Callable, optional): lagrangian function. Defaults to IRLLagrangian.
+            init_params (Callable, optional): parameter initialization function. Defaults to initDirectIRL.
+            gradients (Callable, optional): gradient computation function. Defaults to exactNaturalIRL.
+            grad_proc (Callable, optional): gradient processing fucntion. Defaults to irlClipProcessor.
+            proj (Callable, optional): projection. Defaults to irlL2Proj.
+        """        
+        
+        """Randomness"""
         if key is not None:
             self.key = key
         else:   
             self.key = jax.random.PRNGKey(0)
             
+        """MDP"""
         self.mdp = mdp
         
+        """Hyperparameters"""
         self.clip_tresh = clip_thresh
         self.beta = beta
         self.w_radius = w_radius
         self.policy_lr = policy_lr
         self.reward_lr = reward_lr
         
+        """Problem specific functions"""
         self.ret = ret
         self.pFun = pFun
         self.rFun = rFun
-        self.expertPolicy = expertPolicy
         self.reg = lambda p : - self.beta * reg(p)
+        
+        """Expert policy"""
+        self.expertPolicy = expertPolicy
         self.expertTrainer = expertTrainer
         
+        """Optimizer required functions"""
+        self.lagrangian = lagrangian
+        self.init_params = init_params
+        self.gradients = gradients
+        self.grad_proc = grad_proc
+        self.proj = proj
 
-    def train(self, stepcount:int, pbar: bool = True):
-        
+    def train(self, stepcount:int, pbar: bool = True)->Tuple[Dict[str,Any],List[Dict[str,Any]]]:
+        """Training method.
+
+        Args:
+            stepcount (int): number of training steps
+            pbar (bool, optional): if true, uses a tqdm progress bar. Defaults to True.
+
+        Returns:
+            Tuple[Dict[str,Any],List[Dict[str,Any]]]: The optimized variables (in a dictionary) and the training traces (the logs).
+        """        
+
         """Recovering the expert policy (that we are going recover to clone)"""
         print("Computing the expert's policy")
         if self.expertPolicy is None:
@@ -88,15 +134,15 @@ class IRL_Trainer():
                                                 self.reg)
 
         """Defining the optimizer functions"""
-        L = IRLLagrangian(self.expertPolicy,self.ret)
-        init = initDirectIRL(self.key,self.mdp)                 
-        grad = exactNaturalIRL(L,self.mdp,
-                               self.pFun,self.rFun,
-                               self.reg)      
-        proc = irlClipProcessor(self.policy_lr,
+        L = self.lagrangian(self.expertPolicy,self.ret)
+        init = self.init_params(self.key,self.mdp)                 
+        grad = self.gradients(L,self.mdp,
+                                self.pFun,self.rFun,
+                                self.reg)      
+        proc = self.grad_proc(  self.policy_lr,
                                 self.reward_lr,
                                 self.clip_tresh)        
-        proj = irlL2Proj(self.w_radius)
+        proj = self.proj(self.w_radius)
 
         """Defining the metrics functions"""
         pre = policyReconstructionError(self.expertPolicy)
@@ -127,6 +173,8 @@ class IRL_Trainer():
 class TracePlotter(ABC):
     @abstractmethod
     def plotScalar(ax,key,trace,title=None):
+        """Plots a scalar from a training trace.
+        """        
         iters = [e['iter'] for e in trace]
         ls = [e[key] for e in trace]
         ax.plot(iters,ls)
@@ -137,6 +185,8 @@ class TracePlotter(ABC):
 
     @abstractmethod
     def plotGradNorms(ax,key,trace,title=None):
+        """Plots gradient norms.
+        """
         iters = [e['iter'] for e in trace]
         gnorm = [jla.norm(e['grads'][key]) for e in trace]
         ax.plot(iters,gnorm)
