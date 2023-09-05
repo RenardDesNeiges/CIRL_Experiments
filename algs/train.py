@@ -39,7 +39,7 @@ def getExpertPolicy(    key:jax.random.KeyArray,
 
 class PG_Trainer():
     def __init__(self,  mdp: MarkovDecisionProcess, 
-                        policy_lr:float = 2e-3,
+                        policy_lr:float = 2,
                         clip_thresh:float = 5e2,
                         beta:float = 0.1,
                         pFun: Callable = lambda p : nn.softmax(p,axis=1),
@@ -53,9 +53,22 @@ class PG_Trainer():
                         proj: Callable = lambda x : x,
                         ) -> None:
         """Trainer class for policy gradient problems.
-        
-        TODO : write the docstring
-        """        
+
+        Args:
+            mdp (MarkovDecisionProcess): the mdp on which we ant to learn a policy.
+            policy_lr (float, optional): the policy leaning rate. Defaults to 2e-3.
+            clip_thresh (float, optional): the policy gradient clipping thresh. Defaults to 5e2.
+            beta (float, optional): the regularization factor. Defaults to 0.1.
+            pFun (_type_, optional): the policy parameterization. Defaults to lambdap:nn.softmax(p,axis=1).
+            rFun (_type_, optional): the reward parameterization. Defaults to lambdaw:w.
+            reg (Callable, optional): the regularizer function. Defaults to shannonEntropy.
+            ret (Callable, optional): the return fucntion. Defaults to J.
+            key (jax.random.KeyArray, optional): the PRNG key. Defaults to None.
+            init_params (Callable, optional): the params initialization function. Defaults to initDirectPG.
+            gradients (Callable, optional): the gradient function. Defaults to exactNaturalPG.
+            grad_proc (Callable, optional): the gradient processing function. Defaults to pgClipProcessor.
+            proj (_type_, optional): the projection function. Defaults to identity (does nothing).
+        """                
         
         """Randomness"""
         if key is not None:
@@ -125,7 +138,7 @@ class PG_Trainer():
 
 class IRL_Trainer():
     def __init__(self,  mdp: MarkovDecisionProcess, 
-                        policy_lr:float = 2e-3,
+                        policy_lr:float = 2,
                         reward_lr:float = 1,
                         clip_thresh:float = 5e2,
                         w_radius:float = 1,
@@ -147,7 +160,7 @@ class IRL_Trainer():
 
         Args:
             mdp (MarkovDecisionProcess): mdp to optimize on.
-            policy_lr (float, optional): policy learning rate. Defaults to 2e-3.
+            policy_lr (float, optional): policy learning rate. Defaults to 2.
             reward_lr (float, optional): reward learning rate. Defaults to 1.
             clip_thresh (float, optional): reward gradient clipping threshold. Defaults to 5e2.
             w_radius (float, optional): reward class radius. Defaults to 1.
@@ -310,3 +323,35 @@ class TracePlotter(ABC):
 
         fig.tight_layout()
         return fig, ax  
+    
+    @abstractmethod
+    def scalarPlotArray(keys,trainer,opt,trace,fsize,titles=None):
+        if type(keys[0]) == str:
+            c = len(keys); r = 1
+        else:
+            c = len(keys[0]); r = len(keys)
+        fig, ax = plt.subplots(r,c,figsize=fsize)
+        
+        for i in range(c):
+            for j in range(r):
+                
+                if r>1: _ax = ax[i,j]
+                else: _ax = ax[i]
+                
+                if r>1: key = keys[i][j]
+                else: key = keys[i]
+                
+                if key not in trace[0].keys():
+                    # TODO: if we have a third scalar type to log, 
+                    # implement a way to specify saclar type
+                    assert key in trace[0]['grads'].keys()
+                    TracePlotter.plotGradNorms(_ax,key,trace)
+                else:
+                    TracePlotter.plotScalar(_ax,key,trace)
+                if titles is not None:
+                    _ax.set_title(titles[i][j])
+                else:
+                    _ax.set_title(key)
+                
+        fig.tight_layout()
+        return fig, ax
