@@ -165,7 +165,7 @@ def gpomdp( mdp:MarkovDecisionProcess,
                         r_batch[:, :, jnp.newaxis, jnp.newaxis],    # reward along the axes (2,3)
                         summed_grads.shape[2], axis=2),             # so we can elementwise 
                         summed_grads.shape[3],axis=3)               # multiply with the gradients
-
+    
         gradient_tensor = summed_grads[:,:-1,:,:] \
                         * reward_tensor[:,1:,:,:] \
                         * gamma_tensor[:,1:,:,:] 
@@ -197,22 +197,3 @@ def fimEstimator(pFun):
 
     return jax.jit(fim)
 
-# def estimate_fim(batch,theta):
-
-#     def fim_sample(sa,theta):
-#         pg = flatten(jax.grad(lambda p : jnp.log(nn.softmax(p,axis=1))[sa[0],sa[1]])(theta))
-#         return jnp.outer(pg,pg)
-
-    
-#     sa_pairs = jnp.array([flatten(jnp.array([[step[0] for step in trace] for trace in batch])), flatten(jnp.array([[step[1] for step in trace] for trace in batch]))])
-#     return jnp.sum(jnp.array([fim_sample(sa_pairs[:,i],theta) for i in range(sa_pairs.shape[1])]),axis=0)/sa_pairs.shape[1]
-
-# def computeMonteCarloNaturalGrad(theta,mdp,sampler,key,parametrization,B,H,regularizer):
-#     batch = sample_batch(parametrization(theta),mdp,sampler,H,B,key,regularizer)
-#     _g = fast_gpomdp(batch,theta,B,H,mdp.gamma,parametrization)
-#     _shape = _g.shape
-#     fim = estimate_fim(batch,theta)
-#     return jnp.reshape(jla.pinv(fim)@flatten(_g),_shape) # TODO : replace with conjugate grads
-
-# def monteCarloNaturalGrad(mdp,sampler,key,parametrization,B,H,regularizer):
-#     return lambda p : computeMonteCarloNaturalGrad(p,mdp,sampler,key,parametrization,B,H,regularizer)
