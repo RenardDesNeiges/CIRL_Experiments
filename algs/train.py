@@ -11,9 +11,10 @@ import matplotlib.pyplot as plt
 from env.mdp import MarkovDecisionProcess
 from env.gridworld import gridplot
 from algs.utils import shannonEntropy
+from env.sample import Sampler
 from algs.returns import J as Jfunction, IRLLagrangian
-from algs.irl import initDirectIRL, exactNaturalIRL, irlClipProcessor, irlL2Proj
-from algs.pg import initDirectPG, exactNaturalPG, pgClipProcessor
+from algs.irl import initDirectIRL, exactNaturalIRL, irlDefaultProcessor, irlL2Proj
+from algs.pg import initDirectPG, exactNaturalPG, pgDefaultProcessor, pgL2Proj
 from algs.metrics import policyReconstructionError, normalizedRewardError
 from algs.opt import Optimizer
 
@@ -31,7 +32,7 @@ def getExpertPolicy(    key:jax.random.KeyArray,
     CLIP_THRESH = 5e2
     init = initDirectPG(key,mdp)                    
     grad = exactNaturalPG(ret,mdp,pFun,rFun,reg)      
-    proc = pgClipProcessor(LR,CLIP_THRESH)
+    proc = pgDefaultProcessor(LR,CLIP_THRESH)
     
     opt = Optimizer(init=init,grad=grad,proc=proc,log=lambda x,_g,_s,i : None,proj=lambda x: x)
     p, _ = opt.train(key,STEPS,True)
@@ -42,6 +43,7 @@ class PG_Trainer():
                         policy_lr:float = 2,
                         clip_thresh:float = 5e2,
                         beta:float = 0.1,
+                        max_theta:float = 1e3,
                         pFun: Callable = lambda p : nn.softmax(p,axis=1),
                         rFun: Callable = lambda w : w,
                         reg: Callable = shannonEntropy,
@@ -49,8 +51,9 @@ class PG_Trainer():
                         key:jax.random.KeyArray=None, 
                         init_params: Callable = initDirectPG,
                         gradients: Callable = exactNaturalPG,
-                        grad_proc: Callable = pgClipProcessor,
-                        proj: Callable = lambda x : x,
+                        grad_proc: Callable = pgDefaultProcessor,
+                        sampler: Sampler = None,
+                        proj: Callable = pgL2Proj,
                         ) -> None:
         """Trainer class for policy gradient problems.
 
@@ -59,6 +62,7 @@ class PG_Trainer():
             policy_lr (float, optional): the policy leaning rate. Defaults to 2e-3.
             clip_thresh (float, optional): the policy gradient clipping thresh. Defaults to 5e2.
             beta (float, optional): the regularization factor. Defaults to 0.1.
+            beta (float, optional): the radius of the policy param class. Defaults to 1e5.
             pFun (_type_, optional): the policy parameterization. Defaults to lambdap:nn.softmax(p,axis=1).
             rFun (_type_, optional): the reward parameterization. Defaults to lambdaw:w.
             reg (Callable, optional): the regularizer function. Defaults to shannonEntropy.
@@ -66,9 +70,10 @@ class PG_Trainer():
             key (jax.random.KeyArray, optional): the PRNG key. Defaults to None.
             init_params (Callable, optional): the params initialization function. Defaults to initDirectPG.
             gradients (Callable, optional): the gradient function. Defaults to exactNaturalPG.
-            grad_proc (Callable, optional): the gradient processing function. Defaults to pgClipProcessor.
+            grad_proc (Callable, optional): the gradient processing function. Defaults to pgDefaultProcessor.
+            sampler (Sampler, optional): sampler object. Defaults to None.
             proj (_type_, optional): the projection function. Defaults to identity (does nothing).
-        """                
+        """             
         
         """Randomness"""
         if key is not None:
@@ -83,6 +88,7 @@ class PG_Trainer():
         self.clip_tresh = clip_thresh
         self.beta = beta
         self.policy_lr = policy_lr
+        self.max_theta = max_theta
         
         """Problem specific functions"""
         self.ret = ret
@@ -94,6 +100,7 @@ class PG_Trainer():
         self.init_params = init_params
         self.gradients = gradients
         self.grad_proc = grad_proc
+        self.sampler = sampler
         self.proj = proj
 
     def train(self, stepcount:int, pbar: bool = True)->Tuple[Dict[str,Any],List[Dict[str,Any]]]:
@@ -109,17 +116,23 @@ class PG_Trainer():
 
         """Defining the optimizer functions"""
         init = self.init_params(self.key,self.mdp)                 
-        grad = self.gradients(  self.ret,self.mdp,
-                                self.pFun,self.rFun,
-                                self.reg)      
+        if self.sampler is not None:
+            grad = self.gradients(  self.ret,self.mdp, 
+                                    self.sampler,
+                                    self.pFun,self.rFun,
+                                    self.reg)      
+        else: #TODO: maybe think of a way of catching when a non stoch grad is fed a sampler?
+            grad = self.gradients(  self.ret,self.mdp,
+                                    self.pFun,self.rFun,
+                                    self.reg)      
         proc = self.grad_proc(  self.policy_lr,
                                 self.clip_tresh)        
-        proj = self.proj
+        proj = self.proj(self.max_theta)
 
         """Defining the logger"""
         def logger( params, grads, step, i):
             return {
-                'J'         :    self.ret(self.mdp,
+                'J'         :   self.ret(self.mdp,
                                 self.pFun(params['policy']),
                                 self.rFun(params['reward']),
                                 self.reg), 
@@ -153,7 +166,7 @@ class IRL_Trainer():
                         lagrangian: Callable = IRLLagrangian,
                         init_params: Callable = initDirectIRL,
                         gradients: Callable = exactNaturalIRL,
-                        grad_proc: Callable = irlClipProcessor,
+                        grad_proc: Callable = irlDefaultProcessor,
                         proj: Callable = irlL2Proj,
                         ) -> None:
         """Trainer class for inverse reinforcement learning problems.
@@ -175,7 +188,7 @@ class IRL_Trainer():
             lagrangian (Callable, optional): lagrangian function. Defaults to IRLLagrangian.
             init_params (Callable, optional): parameter initialization function. Defaults to initDirectIRL.
             gradients (Callable, optional): gradient computation function. Defaults to exactNaturalIRL.
-            grad_proc (Callable, optional): gradient processing fucntion. Defaults to irlClipProcessor.
+            grad_proc (Callable, optional): gradient processing fucntion. Defaults to irlDefaultProcessor.
             proj (Callable, optional): projection. Defaults to irlL2Proj.
         """        
         

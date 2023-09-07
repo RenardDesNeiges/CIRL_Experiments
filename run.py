@@ -32,7 +32,7 @@ def main_pg():
         jnp.sum(jnp.exp(jax.random.uniform(key,(gridMDP.n,))))
         
     """Defining a sampler for the MDP"""
-    smp = Sampler(MDP=gridMDP,key=key,batchsize=BATCH,horizon=HORIZON)
+    smp = Sampler(MDP=gridMDP,batchsize=BATCH,horizon=HORIZON,key=key)
 
     """Defining the relevant function"""
     pFun = lambda p : nn.softmax(p,axis=1)  # policy function
@@ -42,7 +42,7 @@ def main_pg():
     init = initDirectPG(key,gridMDP)                    # init function
     # grad = stochNaturalPG(J,gridMDP,smp,pFun,rFun,reg)      # gradient function
     grad = exactNaturalPG(J,gridMDP,pFun,rFun,reg)      # gradient function
-    proc = pgClipProcessor(LR,CLIP_THRESH)
+    proc = pgDefaultProcessor(LR,CLIP_THRESH)
     
     """Defining the logger"""
     def logger( params, grads, step, i):
@@ -78,7 +78,7 @@ def getExpertPolicy(mdp,key,beta):
     
     init = initDirectPG(key,mdp)                    # init function
     grad = exactNaturalPG(J,mdp,pFun,rFun,reg)      # gradient function
-    proc = pgClipProcessor(LR,CLIP_THRESH)
+    proc = pgDefaultProcessor(LR,CLIP_THRESH)
     
     opt = Optimizer(init=init,grad=grad,proc=proc,log=lambda x,_g,_s,i : None,proj=lambda x: x)
     p, _ = opt.train(key,STEPS,True)
@@ -114,7 +114,7 @@ def main_irl():
 
     init = initDirectIRL(key,gridMDP)                   # init function
     grad = exactNaturalIRL(L,gridMDP,pFun,rFun,reg)     # gradient function 
-    proc = irlClipProcessor(PLR,RLR,CLIP_THRESH)        # gradient processing
+    proc = irlDefaultProcessor(PLR,RLR,CLIP_THRESH)        # gradient processing
     proj = irlL2Proj(W_RADIUS)
 
 

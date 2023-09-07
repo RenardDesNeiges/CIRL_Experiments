@@ -8,6 +8,7 @@ from env.mdp import MarkovDecisionProcess
 from env.sample import Sampler
 from algs.utils import flatten
 from algs.grads import vanillaGradOracle, naturalGradOracle, exactFIMOracle, gpomdp, fimEstimator
+from algs.projs import euclidean_l2ball
 
 """Parameters initialization methods"""
 def initDirectPG(   k: jax.random.KeyArray,
@@ -51,13 +52,22 @@ def exactNaturalPG( J:Callable,
                     pFun:Callable,
                     rFun:Callable,
                     reg:Callable)->Callable:
-    pGrad = naturalGradOracle(J,mdp,pFun,rFun, reg)
+    pGrad = vanillaGradOracle(J,mdp,pFun,rFun, reg) 
+    
+    # TODO: compute exact FIM and then invert in that function (to allow for logging the FIM)
     def grad(key,p):
         _ = key
-        _pg = pGrad(p)
+        _g = pGrad(p)
+        _shape = p['policy'].shape
+        _fim = exactFIMOracle(mdp,pFun, p['policy'])
+        _pg = jnp.reshape(jla.pinv(_fim)@flatten(_g),_shape)
         _rg = jnp.zeros_like(p['reward'])
+        # Here we append additional values to the grad object for logging purposes
+        # specifically we pass the fisher-information related parameters
         return {
             'policy' : _pg,
+            'exact_fim' : _fim,
+            'exact_fim_pinv' : jla.pinv(_fim),
             'reward' : _rg,
         }
     return grad
@@ -96,23 +106,34 @@ def stochNaturalPG( J:Callable,
         _shape = _g.shape
         _pg = jnp.reshape(jla.pinv(_fim)@flatten(_g),_shape)
         _rg = jnp.zeros_like(p['reward'])
-        return {
+        # Here we append additional values to the grad object for logging purposes
+        # specifically we pass the fisher-information related parameters
+        return { 
+            'raw_policy_grads' :_g,
             'policy' : _pg,
             'reward' : _rg,
             'fim'    : _fim,
+            'fim_pinv'    : jla.pinv(_fim),
             'exact_fim'    : _exact_fim,
+            'exact_fim_pinv'    : jla.pinv(_exact_fim),
         }
     return grad
 
 """Gradient preprocessors"""
-def pgClipProcessor(plr:float,ct:float)->Callable:
+def pgDefaultProcessor(plr:float,ct:float)->Callable:
     def proc(g):
         return {
             'policy': jax.numpy.nan_to_num(
-                jnp.clip(
-                    plr*g['policy']
-                ,a_min=-ct,a_max=ct),
+                    plr*g['policy'],
             copy=False, nan=0.0), 
             'reward': g['reward'], # not learning, just implement identity
             }
     return proc
+
+
+"""Projection operations"""
+def pgL2Proj(t:float)->Callable:
+    def proj(x):
+        x['policy']=euclidean_l2ball(x['policy'],t) # ensure this is a distribution
+        return x
+    return proj

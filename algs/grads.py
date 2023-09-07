@@ -166,9 +166,9 @@ def gpomdp( mdp:MarkovDecisionProcess,
                         summed_grads.shape[2], axis=2),             # so we can elementwise 
                         summed_grads.shape[3],axis=3)               # multiply with the gradients
     
-        gradient_tensor = summed_grads[:,:-1,:,:] \
-                        * reward_tensor[:,1:,:,:] \
-                        * gamma_tensor[:,1:,:,:] 
+        gradient_tensor = summed_grads \
+                        * reward_tensor \
+                        * gamma_tensor
 
         return (1/smp.b)*jnp.sum(gradient_tensor,axis=(0,1))
     return jax.jit(grad)
