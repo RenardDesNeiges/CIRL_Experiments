@@ -94,6 +94,21 @@ def euclidean_l2ball(v, s=1):
     if norm < s: return v
     return v*(s/norm)
 
+def euclidean_lINFball(v, s=1):
+    """ Compute the Euclidean projection on a L∞-ball
+    ----------
+    v: (n,) numpy array,
+       n-dimensional vector to project
+    s: int, optional, default: 1,
+       radius of the L∞-ball
+    Returns
+    -------
+    w: (n,) numpy array,
+       Euclidean projection of v on the L∞-ball of radius s
+    """
+    assert s > 0, "Radius s must be strictly positive (%d <= 0)" % s
+    return jnp.clip(v, a_min=-s,a_max=s)
+
 def euclidian_pos_orthant(v,):
     """Projects to the positive orthant
 
