@@ -71,13 +71,11 @@ def exactNaturalIRL(J:Callable,
 
 
 """Gradient preprocessors"""
-def irlClipProcessor(plr:float,rlr:float,ct:float)->Callable:
+def irlDefaultProcessor(plr:float,rlr:float,ct:float)->Callable:
     def proc(g):
         return {
             'policy': jax.numpy.nan_to_num(
-                jnp.clip(
-                    plr*g['policy']
-                ,a_min=-ct,a_max=ct),
+                    plr*g['policy'],
             copy=False, nan=0.0), 
             'reward': -rlr*g['reward'], # not learning, just implement identity
             }
@@ -85,9 +83,9 @@ def irlClipProcessor(plr:float,rlr:float,ct:float)->Callable:
 
 
 """Projection operations"""
-def irlL2Proj(r:float)->Callable:
+def irlL2Proj(r:float, t:float)->Callable:
     def proj(x):
-        # x['policy']=euclidean_l1ball(x['policy'],1) # ensure this is a distribution
+        x['policy']=euclidean_l2ball(x['policy'],t) # ensure this is a distribution
         x['reward']=euclidean_l2ball(x['reward'],r)
         return x
     return proj
