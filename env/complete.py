@@ -1,6 +1,6 @@
-import numpy as np
-import numpy.linalg as la
-import numpy.random as rd
+import jax.numpy as np
+import jax.numpy.linalg as la
+import jax.random as rd
 from .mdp import MarkovDecisionProcess
 
 class Complete(MarkovDecisionProcess):
@@ -24,25 +24,34 @@ class Complete(MarkovDecisionProcess):
             rmax (float, optional): Maximum reward. Defaults to 10..
         """
         
-        rd.seed(seed)
+        self.key = rd.PRNGKey(seed)
         self.rmax   : float = rmax
         self.n      : int = n
         self.m      : int = m
         
         # TODO : allow for passing a pre-computed matrix to the MDP directly?
         
-        P_sa : np.ndarray = np.array(  [[self._get_state_distrib() 
+        P_sa = np.array(  [[self._get_state_distrib() 
                                             for _  in range(self.n)      ] 
                                             for _  in range(self.m)             ],
                                      dtype=np.float64) # P ∈ (n x m x n)
         
-        R : np.ndarray = np.array(  [[self._reward()
+        R = np.array(  [[self._reward()
                                             for _  in range(self.m)             ] 
                                             for _  in range(self.n)             ],dtype=np.float64) # P ∈ (n x m)
         
         super().__init__(self.n,self.m,gamma,P_sa,R,self._get_state_distrib(),b=b,Psi=Psi)
 
 
+    def _get_subkey(self)->rd.KeyArray:
+        """Handles subkey splitting when sampling sequentially.
+
+        Returns:
+            jax.random.KeyArray: the key to use (inner key has been split)
+        """
+        key, subkey = rd.split(self.key)
+        self.key = key
+        return subkey
     
     def _get_state_distrib(self,) -> np.ndarray:
         """Returns the markov transition probability P(sp|s,a) as a n=|S| sized vector
@@ -51,10 +60,10 @@ class Complete(MarkovDecisionProcess):
         Returns:
             np.ndarray: a valid disiribution for the P matrix col
         """
-        d = rd.rand(self.n)
+        d = rd.uniform(self._get_subkey(),shape=(self.n,))
         d = d/la.norm(d,1) # make sure d is an actual distribution
         return d
         
     def _reward(self,)->float:
-        return rd.rand()*self.rmax
+        return rd.uniform(self._get_subkey())*self.rmax
     

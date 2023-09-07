@@ -1,4 +1,4 @@
-import numpy as np
+import jax.numpy as np
 from typing import List, Tuple
 from .mdp import MarkovDecisionProcess
 import matplotlib
@@ -41,7 +41,8 @@ class Gridworld(MarkovDecisionProcess):
                                             for a  in range(self.m)             ] 
                                             for s  in range(self.n)             ],dtype=np.float64)
         
-        init_distrib = np.zeros((self.n),dtype=np.float64); init_distrib[0] = 1. # TODO : allow for passing another distribution as an argument
+        init_distrib = np.zeros((self.n),dtype=np.float64)
+        init_distrib = init_distrib.at[0].set(1) # TODO : allow for passing another distribution as an argument
         
         b  : np.ndarray = np.ones((len(obstacles)))*0.5
         Psi : np.ndarray = np.array(  [[[self._cost_matrix(s,a,obs) 
