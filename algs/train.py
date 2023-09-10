@@ -62,7 +62,7 @@ class PG_Trainer():
             policy_lr (float, optional): the policy leaning rate. Defaults to 2e-3.
             clip_thresh (float, optional): the policy gradient clipping thresh. Defaults to 5e2.
             beta (float, optional): the regularization factor. Defaults to 0.1.
-            beta (float, optional): the radius of the policy param class. Defaults to 1e5.
+            max_theta (float, optional): the radius of the policy param class. Defaults to 1e3.
             pFun (_type_, optional): the policy parameterization. Defaults to lambdap:nn.softmax(p,axis=1).
             rFun (_type_, optional): the reward parameterization. Defaults to lambdaw:w.
             reg (Callable, optional): the regularizer function. Defaults to shannonEntropy.
@@ -155,6 +155,7 @@ class IRL_Trainer():
                         reward_lr:float = 1,
                         clip_thresh:float = 5e2,
                         w_radius:float = 1,
+                        max_theta:float = 1e3,
                         beta:float = 0.1,
                         pFun: Callable = lambda p : nn.softmax(p,axis=1),
                         rFun: Callable = lambda r : r,
@@ -177,6 +178,7 @@ class IRL_Trainer():
             reward_lr (float, optional): reward learning rate. Defaults to 1.
             clip_thresh (float, optional): reward gradient clipping threshold. Defaults to 5e2.
             w_radius (float, optional): reward class radius. Defaults to 1.
+            math_theta (float, optional): the radius of the policy param class. Defaults to 1e3.
             beta (float, optional): regularization factor. Defaults to 5.
             pFun (_type_, optional): policy parameterization. Defaults to lambdap:nn.softmax(p,axis=1).
             rFun (_type_, optional): reward parameterization. Defaults to lambdar:r.
@@ -205,6 +207,7 @@ class IRL_Trainer():
         self.clip_tresh = clip_thresh
         self.beta = beta
         self.w_radius = w_radius
+        self.max_theta = max_theta
         self.policy_lr = policy_lr
         self.reward_lr = reward_lr
         
@@ -256,7 +259,7 @@ class IRL_Trainer():
         proc = self.grad_proc(  self.policy_lr,
                                 self.reward_lr,
                                 self.clip_tresh)        
-        proj = self.proj(self.w_radius)
+        proj = self.proj(self.w_radius,self.max_theta)
 
         """Defining the metrics functions"""
         pre = policyReconstructionError(self.expertPolicy)

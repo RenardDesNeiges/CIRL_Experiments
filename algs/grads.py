@@ -9,8 +9,6 @@ from env.mdp import MarkovDecisionProcess
 from env.sample import Sampler
 from algs.utils import flatten
 
-CLIP_THRESH = 1e3
-
 """Exact gradient oracles
 --> all gradient functions have the prototype 
 f: (batch [Array],  parameters [Dict of jnp.arrays]) -> grad [jnp.array]
@@ -176,24 +174,24 @@ def gpomdp( mdp:MarkovDecisionProcess,
 """Stochastic natural gradients and FIM estimation"""
 
 
-# I think the batch storage has changed since the last time I looked at that....
-# So this has to be rewritten
-# Also the policy parametrization is hardcoded here 
-# (which is absolutely cursed shit)
-# I think what makes most sense is that this should return a function
-# that should match the signature of the function returned by gpomdp
-
-def fimEstimator(pFun):
+def fimEstimator(mdp,pFun):
     
     def fim(batch,p):
+        pi = pFun(p['policy'])
+        s_batch, _, _ = batch
+        ps = jnp.bincount(flatten(s_batch))/flatten(s_batch).shape[0]
+        psa = pi * jnp.repeat(jnp.expand_dims(ps,1), pi.shape[1],axis=1)
+        sid = jnp.repeat(jnp.expand_dims(jnp.arange(mdp.n),1),mdp.m,axis=1)
+        aid = jnp.repeat(jnp.expand_dims(jnp.arange(mdp.m),0),mdp.n,axis=0)
+
         def fim_sample(s,a):
             pg = flatten(jax.grad(lambda p : jnp.log(pFun(p))[s,a])(p['policy']))
             return jnp.outer(pg,pg)
-        
-        s_batch, a_batch, _ = batch
-        s_batch = flatten(s_batch); a_batch = flatten(a_batch)
-        fim_sbatch = jax.vmap(fim_sample)(s_batch,a_batch)
-        return jnp.sum(fim_sbatch,axis=0)/fim_sbatch.shape[0]
 
-    return jax.jit(fim)
+        def element_op(p,s,a):
+            return p*fim_sample(s,a)
+
+        return jnp.sum(jax.vmap(element_op)(flatten(psa),flatten(sid),flatten(aid)),axis=0)
+
+    return fim
 

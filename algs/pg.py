@@ -97,7 +97,7 @@ def stochNaturalPG( J:Callable,
                     rFun:Callable,
                     reg:Callable)->Callable:
     pGrad = gpomdp(mdp,pFun,smp)
-    fim = fimEstimator(pFun)
+    fim = fimEstimator(mdp,pFun)
     def grad(key,p):
         smp.key = key
         _exact_fim = exactFIMOracle(mdp,pFun,p['policy'])

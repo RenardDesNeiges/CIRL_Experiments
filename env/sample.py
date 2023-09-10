@@ -1,13 +1,15 @@
+"""env.sample
+
+Contains the Sampler class for sampling batches from MDPs.
+
+Titouan Renard, September 2023
+"""
 import jax
 from jax import numpy as jnp
 
 from typing import List, Tuple, Callable
 
 from env.mdp import MarkovDecisionProcess
-
-"""Note for further improvements: 
-        - batch sampling should be vectorizable for a much faster implementation
-"""
 
 class Sampler():
     def __init__(self,  MDP:MarkovDecisionProcess, 
@@ -97,24 +99,6 @@ class Sampler():
                 r_t -= regularizer(pi[s_t,:])
         return traj
     
-    # def batch(self,  pi:jnp.ndarray,
-    #                         regularizer:Callable=None
-    #                         )->Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]:
-    #     """Samples a batch of trajectories.
-
-    #     Args:
-    #         pi (jnp.ndarray): the policy under which to sample the trajectories.
-    #         regularizer (Callable, optional): The regularizer to apply (for reward-discounting). Defaults to None.
-
-    #     Returns:
-    #         Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]: the batch in the form (states,actions,rewards)
-    #     """
-        
-    #     raw_batch=[self.trajectory(pi,regularizer) for _ in range(self.b)]
-    #     s_batch = jnp.array([[e[0] for e in t] for t in raw_batch])
-    #     a_batch = jnp.array([[e[1] for e in t] for t in raw_batch])
-    #     r_batch = jnp.array([[e[2] for e in t] for t in raw_batch])
-    #     return (s_batch,a_batch,r_batch)
     def batch(self,  pi:jnp.ndarray,
                             regularizer:Callable=None
                             )->Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]:
@@ -144,7 +128,7 @@ class Sampler():
         def getRewards(state,action):
             _r = self.MDP.R[state,action] 
             if regularizer is not None:
-                _r -= regularizer(pi[state,:])
+                _r -= regularizer(pi[state,:])§
             return _r
         
         
@@ -159,7 +143,7 @@ class Sampler():
             key, subkey = jax.random.split(key)
             keyArray = jax.random.split(subkey, self.b)
             _s = jax.vmap(nextState)(s,a,keyArray)
-            return (s,key), (_s,a,r)
+            return (_s,key), (s,a,r)
 
         keyArray = jax.random.split(self._get_subkey(), self.b)
         s = jax.vmap(initState)(keyArray)
@@ -167,4 +151,4 @@ class Sampler():
         _, result = jax.lax.scan(_inner_loop,init,None,length=self.h)
         
         # because I want batch to be the leading axis
-        return tuple(jnp.swapaxes(e,0,1) for e in result) 
+        return tuple(jnp.swapaxes(e,0,1) for e in result)
