@@ -122,6 +122,45 @@ def rewardGradOracle(   J:Callable,
     
     return jax.jit(grad_function)
 
+
+def monteCarloRewardGrad(   J:Callable,
+                            mdp:MarkovDecisionProcess,
+                            pFun:Callable,
+                            rFun:Callable,
+                            reg:Callable,
+                            smp:Callable,
+                            expertPolicy: jnp.ndarray,
+                            )->Callable[[Dict[str,jnp.ndarray]],jnp.ndarray]:
+    def rSA(w):
+        return lambda s,a : rFun(w)[s,a]
+    def batchReturn(batch_s,batch_a):
+        gammas = jnp.repeat(jnp.expand_dims( mdp.gamma**jnp.arange(batch_s.shape[1]),
+                                    0),batch_s.shape[0],0)
+        return lambda w : jnp.sum(gammas * jax.vmap(rSA(w))(batch_s,batch_a))\
+            /batch_s.shape[0]
+    def batchGrad(batch_s,batch_a):
+        return lambda w  : jax.grad(batchReturn(batch_s,batch_a))(w)
+    
+    # 1. Sample a reference expert dataset  
+    # Implementation decision ! For now the batch size of the expert dataset is the same as the gradient sampling, maybe find a way of having an expert specific sampler later
+    expert_s, expert_a, _ = smp.batch(expertPolicy,regularizer=reg)
+    # 2. Compute its feature expectation function and store it
+    expert_features = batchGrad(expert_s,expert_a) # this is a function of weights w
+    
+    # 3. Return a gradient function that 
+    #       a. takes as input a batch and weights
+    #       b. computes the learned policy-reward feature expectation
+    #       c. recovers the gradients
+    
+    def grad(batch,p):
+        policy_s, policy_a, _ = batch
+        policy_features = batchGrad(policy_s,policy_a)
+        return policy_features(p['reward']) - expert_features(p['reward'])
+    
+    return grad
+
+
+
 """Stochastic gradients estimators
 --> all gradient functions have the prototype 
 f: (batch [Array],  parameters [Dict of jnp.arrays]) -> grad [jnp.array]

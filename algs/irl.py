@@ -8,7 +8,7 @@ from env.mdp import MarkovDecisionProcess
 from env.sample import Sampler
 from algs.utils import flatten
 from algs.projs import euclidean_l1ball, euclidean_l2ball
-from algs.grads import vanillaGradOracle, rewardGradOracle, naturalGradOracle
+from algs.grads import vanillaGradOracle, rewardGradOracle, naturalGradOracle,gpomdp,monteCarloRewardGrad, fimEstimator, exactFIMOracle
 
 
 
@@ -26,6 +26,26 @@ def initDirectIRL(   k: jax.random.KeyArray,
         p = jax.random.uniform(sk,(mdp.n,mdp.m))
         k, sk = jax.random.split(k) # we need to instantiate a param vector
         r = jax.random.uniform(sk,(mdp.n,mdp.m))
+        return {
+            'policy': p,
+            'reward': r,
+        }
+        
+    return lambda : init(k)
+
+def initStateOnlyIRL(   k: jax.random.KeyArray,
+                        mdp:MarkovDecisionProcess)->Callable:
+    """Initializes direct policy gradient parameters.
+
+    Args:
+        k (jax.random.KeyArray): jax PRNG key
+        mdp (MarkovDecisionProcess): MDP
+    """
+    def init(k):
+        k, sk = jax.random.split(k)
+        p = jax.random.uniform(sk,(mdp.n,mdp.m))
+        k, sk = jax.random.split(k) # we need to instantiate a param vector
+        r = jax.random.uniform(sk,(mdp.n,1))
         return {
             'policy': p,
             'reward': r,
@@ -51,7 +71,6 @@ def exactVanillaIRL( J:Callable,
         }
     return grad
 
-"""Gradient computation wrappers"""
 def exactNaturalIRL(J:Callable,
                     mdp:MarkovDecisionProcess,
                     pFun:Callable,
@@ -69,6 +88,39 @@ def exactNaturalIRL(J:Callable,
         }
     return grad
 
+def stochNaturalIRL(J:Callable,
+                    mdp:MarkovDecisionProcess,
+                    smp:Sampler,
+                    pFun:Callable,
+                    rFun:Callable,
+                    reg:Callable,
+                    expertPolicy: jnp.ndarray,
+                    )->Callable:
+    pGrad = gpomdp(mdp,pFun,smp)
+    rGrad = monteCarloRewardGrad(J,mdp,pFun,rFun,reg,smp,expertPolicy)
+    
+    fim = fimEstimator(mdp,pFun)
+    def grad(key,p):
+        smp.key = key
+        _exact_fim = exactFIMOracle(mdp,pFun,p['policy'])
+        batch = smp.batch(pFun(p['policy']),R=rFun(p['reward']),regularizer=reg)
+        _g = pGrad(batch,p); _fim = fim(batch,p)
+        _shape = _g.shape
+        _pg = jnp.reshape(jla.pinv(_fim)@flatten(_g),_shape)
+        _rg = rGrad(batch,p)
+        
+        # Here we append additional values to the grad object for logging purposes
+        # specifically we pass the fisher-information related parameters
+        return { 
+            'raw_policy_grads' :_g,
+            'policy' : _pg,
+            'reward' : _rg,
+            'fim'    : _fim,
+            'fim_pinv'    : jla.pinv(_fim),
+            'exact_fim'    : _exact_fim,
+            'exact_fim_pinv'    : jla.pinv(_exact_fim),
+        }
+    return grad
 
 """Gradient preprocessors"""
 def irlDefaultProcessor(plr:float,rlr:float,ct:float)->Callable:

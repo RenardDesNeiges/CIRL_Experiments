@@ -25,13 +25,12 @@ def getExpertPolicy(    key:jax.random.KeyArray,
                         mdp:MarkovDecisionProcess,
                         ret:Callable,
                         pFun:Callable,
-                        rFun:Callable,
                         reg:Callable)->jnp.ndarray:
     STEPS=60
     LR = 1
     CLIP_THRESH = 5e2
     init = initDirectPG(key,mdp)                    
-    grad = exactNaturalPG(ret,mdp,pFun,rFun,reg)      
+    grad = exactNaturalPG(ret,mdp,pFun,lambda w : w,reg)      
     proc = pgDefaultProcessor(LR,CLIP_THRESH)
     
     opt = Optimizer(init=init,grad=grad,proc=proc,log=lambda x,_g,_s,i : None,proj=lambda x: x)
@@ -149,6 +148,7 @@ class PG_Trainer():
         
         return optimizers, trace
 
+
 class IRL_Trainer():
     def __init__(self,  mdp: MarkovDecisionProcess, 
                         policy_lr:float = 2,
@@ -168,6 +168,7 @@ class IRL_Trainer():
                         init_params: Callable = initDirectIRL,
                         gradients: Callable = exactNaturalIRL,
                         grad_proc: Callable = irlDefaultProcessor,
+                        sampler: Sampler = None,
                         proj: Callable = irlL2Proj,
                         ) -> None:
         """Trainer class for inverse reinforcement learning problems.
@@ -191,6 +192,7 @@ class IRL_Trainer():
             init_params (Callable, optional): parameter initialization function. Defaults to initDirectIRL.
             gradients (Callable, optional): gradient computation function. Defaults to exactNaturalIRL.
             grad_proc (Callable, optional): gradient processing fucntion. Defaults to irlDefaultProcessor.
+            sampler (Sampler, optional): sampler object. Defaults to None.
             proj (Callable, optional): projection. Defaults to irlL2Proj.
         """        
         
@@ -226,6 +228,7 @@ class IRL_Trainer():
         self.init_params = init_params
         self.gradients = gradients
         self.grad_proc = grad_proc
+        self.sampler = sampler
         self.proj = proj
 
     def train(self, stepcount:int, pbar: bool = True)->Tuple[Dict[str,Any],List[Dict[str,Any]]]:
@@ -247,15 +250,23 @@ class IRL_Trainer():
                                                 self.mdp,
                                                 self.ret,
                                                 self.pFun,
-                                                self.rFun,
                                                 self.reg)
 
         """Defining the optimizer functions"""
         L = self.lagrangian(self.expertPolicy,self.ret)
-        init = self.init_params(self.key,self.mdp)                 
-        grad = self.gradients(L,self.mdp,
-                                self.pFun,self.rFun,
-                                self.reg)      
+        init = self.init_params(self.key,self.mdp)     
+        
+        
+        if self.sampler is not None:
+            grad = self.gradients(  L,self.mdp, 
+                                    self.sampler,
+                                    self.pFun,self.rFun,
+                                    self.reg, self.expertPolicy)
+        else: #TODO: maybe think of a way of catching when a non stoch grad is fed a sampler?
+            grad = self.gradients(  L,self.mdp,
+                                    self.pFun,self.rFun,
+                                    self.reg)      
+                    
         proc = self.grad_proc(  self.policy_lr,
                                 self.reward_lr,
                                 self.clip_tresh)        

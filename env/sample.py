@@ -99,9 +99,10 @@ class Sampler():
                 r_t -= regularizer(pi[s_t,:])
         return traj
     
-    def batch(self,  pi:jnp.ndarray,
-                            regularizer:Callable=None
-                            )->Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]:
+    def batch(self, pi:jnp.ndarray,
+                    R:jnp.ndarray = None,
+                    regularizer:Callable=None
+                    )->Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]:
         """Samples a batch of trajectories.
 
         Args:
@@ -111,7 +112,8 @@ class Sampler():
         Returns:
             Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]: the batch in the form (states,actions,rewards)
         """
-        
+        if R is None:
+            R = self.MDP.R
         def initState(key):
             return jax.random.choice(key,
                                         jnp.arange(self.MDP.n),
@@ -126,9 +128,9 @@ class Sampler():
                                         jnp.arange(self.MDP.n), 
                                         p = p)
         def getRewards(state,action):
-            _r = self.MDP.R[state,action] 
+            _r = R[state,action] 
             if regularizer is not None:
-                _r -= regularizer(pi[state,:])§
+                _r -= regularizer(pi[state,:])
             return _r
         
         

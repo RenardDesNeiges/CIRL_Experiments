@@ -101,7 +101,7 @@ def stochNaturalPG( J:Callable,
     def grad(key,p):
         smp.key = key
         _exact_fim = exactFIMOracle(mdp,pFun,p['policy'])
-        batch = smp.batch(pFun(p['policy']),reg)
+        batch = smp.batch(pFun(p['policy']),regularizer=reg)
         _g = pGrad(batch,p); _fim = fim(batch,p)
         _shape = _g.shape
         _pg = jnp.reshape(jla.pinv(_fim)@flatten(_g),_shape)
