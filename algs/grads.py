@@ -213,7 +213,7 @@ def gpomdp( mdp:MarkovDecisionProcess,
 """Stochastic natural gradients and FIM estimation"""
 
 
-def fimEstimator(mdp,pFun):
+def fimEstimator(mdp,pFun,reg_param=0):
     
     def fim(batch,p):
         pi = pFun(p['policy'])
@@ -230,7 +230,9 @@ def fimEstimator(mdp,pFun):
         def element_op(p,s,a):
             return p*fim_sample(s,a)
 
-        return jnp.sum(jax.vmap(element_op)(flatten(psa),flatten(sid),flatten(aid)),axis=0)
+        F = jnp.sum(jax.vmap(element_op)(flatten(psa),flatten(sid),flatten(aid)),axis=0)
+
+        return F + jnp.eye(F.shape[0])*reg_param
 
     return fim
 

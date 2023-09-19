@@ -77,11 +77,12 @@ def stochVanillaPG( J:Callable,
                     smp:Sampler,
                     pFun:Callable,
                     rFun:Callable,
-                    reg:Callable)->Callable:
+                    reg:Callable,
+                    fim_reg:float)->Callable:
     pGrad = gpomdp(mdp,pFun,smp)
     def grad(key,p):
         smp.key = key
-        batch = smp.batch(pFun(p['policy']),reg)
+        batch = smp.batch(pFun(p['policy']),regularizer=reg)
         _pg = pGrad(batch,p)
         _rg = jnp.zeros_like(p['reward'])
         return {
@@ -95,9 +96,10 @@ def stochNaturalPG( J:Callable,
                     smp:Sampler,
                     pFun:Callable,
                     rFun:Callable,
-                    reg:Callable)->Callable:
+                    reg:Callable,
+                    fim_reg:float,)->Callable:
     pGrad = gpomdp(mdp,pFun,smp)
-    fim = fimEstimator(mdp,pFun)
+    fim = fimEstimator(mdp,pFun,fim_reg)
     def grad(key,p):
         smp.key = key
         _exact_fim = exactFIMOracle(mdp,pFun,p['policy'])

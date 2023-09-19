@@ -43,6 +43,7 @@ class PG_Trainer():
                         clip_thresh:float = 5e2,
                         beta:float = 0.1,
                         max_theta:float = 1e3,
+                        fim_reg:float = 1e-3,
                         pFun: Callable = lambda p : nn.softmax(p,axis=1),
                         rFun: Callable = lambda w : w,
                         reg: Callable = shannonEntropy,
@@ -88,6 +89,7 @@ class PG_Trainer():
         self.beta = beta
         self.policy_lr = policy_lr
         self.max_theta = max_theta
+        self.fim_reg = fim_reg
         
         """Problem specific functions"""
         self.ret = ret
@@ -119,7 +121,7 @@ class PG_Trainer():
             grad = self.gradients(  self.ret,self.mdp, 
                                     self.sampler,
                                     self.pFun,self.rFun,
-                                    self.reg)      
+                                    self.reg,self.fim_reg)      
         else: #TODO: maybe think of a way of catching when a non stoch grad is fed a sampler?
             grad = self.gradients(  self.ret,self.mdp,
                                     self.pFun,self.rFun,
@@ -157,6 +159,7 @@ class IRL_Trainer():
                         w_radius:float = 1,
                         max_theta:float = 1e3,
                         beta:float = 0.1,
+                        fim_reg:float = 0.1,
                         pFun: Callable = lambda p : nn.softmax(p,axis=1),
                         rFun: Callable = lambda r : r,
                         reg: Callable = shannonEntropy,
@@ -212,6 +215,7 @@ class IRL_Trainer():
         self.max_theta = max_theta
         self.policy_lr = policy_lr
         self.reward_lr = reward_lr
+        self.fim_reg = fim_reg
         
         """Problem specific functions"""
         self.ret = ret
@@ -261,7 +265,8 @@ class IRL_Trainer():
             grad = self.gradients(  L,self.mdp, 
                                     self.sampler,
                                     self.pFun,self.rFun,
-                                    self.reg, self.expertPolicy)
+                                    self.reg, self.fim_reg,
+                                    self.expertPolicy)
         else: #TODO: maybe think of a way of catching when a non stoch grad is fed a sampler?
             grad = self.gradients(  L,self.mdp,
                                     self.pFun,self.rFun,

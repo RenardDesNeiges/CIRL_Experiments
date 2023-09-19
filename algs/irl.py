@@ -94,12 +94,13 @@ def stochNaturalIRL(J:Callable,
                     pFun:Callable,
                     rFun:Callable,
                     reg:Callable,
+                    fig_reg:float,
                     expertPolicy: jnp.ndarray,
                     )->Callable:
     pGrad = gpomdp(mdp,pFun,smp)
     rGrad = monteCarloRewardGrad(J,mdp,pFun,rFun,reg,smp,expertPolicy)
     
-    fim = fimEstimator(mdp,pFun)
+    fim = fimEstimator(mdp,pFun,fig_reg)
     def grad(key,p):
         smp.key = key
         _exact_fim = exactFIMOracle(mdp,pFun,p['policy'])
@@ -139,6 +140,16 @@ def irlL2Proj(r:float, t:float)->Callable:
     def proj(x):
         x['policy']=euclidean_l2ball(x['policy'],t) # ensure this is a distribution
         x['reward']=euclidean_l2ball(x['reward'],r)
+        return x
+    return proj
+
+
+
+"""Projection operations"""
+def irlL1Proj(r:float, t:float)->Callable:
+    def proj(x):
+        x['policy']=euclidean_l2ball(x['policy'],t) # ensure this is a distribution
+        x['reward']=euclidean_l1ball(x['reward'],r)
         return x
     return proj
 
