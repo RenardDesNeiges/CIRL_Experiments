@@ -10,9 +10,9 @@ from algs.projs import euclidean_l2ball
 
 class ExampleMDPs(ABC):
     @abstractmethod
-    def bandit1(reward_class:str='L2')->MarkovDecisionProcess:
+    def bandit1(n:int=2,reward_class:str='L2')->MarkovDecisionProcess:
         key = jax.random.PRNGKey(1)
-        mdp = Complete(1,2,0.95)
+        mdp = Complete(1,n,0.95)
         key, sk = jax.random.split(key)
         mdp.init_distrib = jnp.exp(jax.random.uniform(sk,(mdp.n,))) / \
         jnp.sum(jnp.exp(jax.random.uniform(key,(mdp.n,))))

@@ -16,7 +16,7 @@ The file structure is as follows:
 │   ├── projs.py            // projection operations
 │   ├── irl.py              // IRL helper functions
 │   ├── pg.py               // PG helper functions
-│   ├── opt.py              // optimizer moduke
+│   ├── opt.py              // optimizer module
 │   ├── metrics.py          // training metrics
 │   ├── returns.py          // Loss/Return computations
 │   ├── train.py            // training wrapper functions
