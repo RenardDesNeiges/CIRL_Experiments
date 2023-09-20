@@ -97,7 +97,7 @@ def stochNaturalIRL(J:Callable,
                     fig_reg:float,
                     expertPolicy: jnp.ndarray,
                     )->Callable:
-    pGrad = gpomdp(mdp,pFun,smp)
+    pGrad = gpomdp(mdp,pFun,smp,reg)
     rGrad = monteCarloRewardGrad(J,mdp,pFun,rFun,reg,smp,expertPolicy)
     
     fim = fimEstimator(mdp,pFun,fig_reg)

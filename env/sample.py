@@ -129,8 +129,8 @@ class Sampler():
                                         p = p)
         def getRewards(state,action):
             _r = R[state,action] 
-            if regularizer is not None:
-                _r -= regularizer(pi[state,:])
+            # if regularizer is not None:
+            #     _r -= regularizer(pi[state,:])
             return _r
         
         

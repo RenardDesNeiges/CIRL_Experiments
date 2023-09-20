@@ -12,7 +12,8 @@ from algs.projs import euclidean_l2ball
 
 """Parameters initialization methods"""
 def initDirectPG(   k: jax.random.KeyArray,
-                    mdp:MarkovDecisionProcess)->Callable:
+                    mdp:MarkovDecisionProcess,
+                    init_radius:float=1                )->Callable:
     """Initializes direct policy gradient parameters.
 
     Args:
@@ -20,7 +21,7 @@ def initDirectPG(   k: jax.random.KeyArray,
         mdp (MarkovDecisionProcess): MDP
     """
     def init(k):
-        p = jax.random.uniform(k,(mdp.n,mdp.m))
+        p = jax.random.uniform(k,(mdp.n,mdp.m))*init_radius - init_radius/2
         r = mdp.R
         return {
             'policy': p,
@@ -79,7 +80,7 @@ def stochVanillaPG( J:Callable,
                     rFun:Callable,
                     reg:Callable,
                     fim_reg:float)->Callable:
-    pGrad = gpomdp(mdp,pFun,smp)
+    pGrad = gpomdp(mdp,pFun,smp,reg)
     def grad(key,p):
         smp.key = key
         batch = smp.batch(pFun(p['policy']),regularizer=reg)
@@ -98,7 +99,7 @@ def stochNaturalPG( J:Callable,
                     rFun:Callable,
                     reg:Callable,
                     fim_reg:float,)->Callable:
-    pGrad = gpomdp(mdp,pFun,smp)
+    pGrad = gpomdp(mdp,pFun,smp,reg)
     fim = fimEstimator(mdp,pFun,fim_reg)
     def grad(key,p):
         smp.key = key

@@ -43,6 +43,7 @@ class PG_Trainer():
                         clip_thresh:float = 5e2,
                         beta:float = 0.1,
                         max_theta:float = 1e3,
+                        init_radius:float = 1,
                         fim_reg:float = 1e-3,
                         pFun: Callable = lambda p : nn.softmax(p,axis=1),
                         rFun: Callable = lambda w : w,
@@ -63,6 +64,7 @@ class PG_Trainer():
             clip_thresh (float, optional): the policy gradient clipping thresh. Defaults to 5e2.
             beta (float, optional): the regularization factor. Defaults to 0.1.
             max_theta (float, optional): the radius of the policy param class. Defaults to 1e3.
+            init_radius (float, optional): the radius of the policy initialization class. Defaults to 1.
             pFun (_type_, optional): the policy parameterization. Defaults to lambdap:nn.softmax(p,axis=1).
             rFun (_type_, optional): the reward parameterization. Defaults to lambdaw:w.
             reg (Callable, optional): the regularizer function. Defaults to shannonEntropy.
@@ -89,6 +91,7 @@ class PG_Trainer():
         self.beta = beta
         self.policy_lr = policy_lr
         self.max_theta = max_theta
+        self.init_radius = init_radius
         self.fim_reg = fim_reg
         
         """Problem specific functions"""
@@ -116,7 +119,7 @@ class PG_Trainer():
         """
 
         """Defining the optimizer functions"""
-        init = self.init_params(self.key,self.mdp)                 
+        init = self.init_params(self.key,self.mdp,self.init_radius)                 
         if self.sampler is not None:
             grad = self.gradients(  self.ret,self.mdp, 
                                     self.sampler,

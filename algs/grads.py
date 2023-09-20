@@ -171,7 +171,8 @@ Here the batch entry is actually used as these are stochastic estimators that re
 
 def gpomdp( mdp:MarkovDecisionProcess,
             pFun:Callable,
-            smp:Sampler
+            smp:Sampler,
+            reg:Callable=None,
             )->Callable[[Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray],
                          Dict[str,jnp.ndarray]],jnp.ndarray]:
     """ Generates a GPOMDP policy gradient estimator function for some mdp,
@@ -188,8 +189,10 @@ def gpomdp( mdp:MarkovDecisionProcess,
     def grad(batch,p):
         def g_log(s,a,theta,pFun):
             return jax.grad(lambda p : jnp.log(pFun(p))[s,a])(theta)
+        def regSample(s):
+            return jax.grad(lambda theta : reg(pFun(theta)[s,:]))(p['policy'])
         _f = lambda s,a : g_log(s,a,p['policy'],pFun)
-    
+        
         s_batch, a_batch, r_batch = batch
         batch_grads = jax.vmap(jax.vmap(_f))(s_batch, a_batch) 
         summed_grads = jnp.cumsum(batch_grads,axis=1) 
@@ -202,13 +205,16 @@ def gpomdp( mdp:MarkovDecisionProcess,
                         r_batch[:, :, jnp.newaxis, jnp.newaxis],    # reward along the axes (2,3)
                         summed_grads.shape[2], axis=2),             # so we can elementwise 
                         summed_grads.shape[3],axis=3)               # multiply with the gradients
-    
+
         gradient_tensor = summed_grads \
                         * reward_tensor \
                         * gamma_tensor
-
-        return (1/smp.b)*jnp.sum(gradient_tensor,axis=(0,1))
-    return jax.jit(grad)
+        if reg is not None:
+            reg_tensor = jax.vmap((jax.vmap(regSample)))(s_batch) \
+                        * gamma_tensor
+            gradient_tensor -= reg_tensor
+        return (1/smp.b)*jnp.sum(gradient_tensor,axis=(0,1)) 
+    return jax.jit(grad) 
 
 """Stochastic natural gradients and FIM estimation"""
 
