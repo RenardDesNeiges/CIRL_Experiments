@@ -212,8 +212,9 @@ def gridplot(gridworld:Gridworld, ax, scalar=None, policy = None,
     ax.set_xlim([0,gridworld.grid_width])
     ax.set_ylim([0,gridworld.grid_height])
     if scalar is not None:
-        for s, value in enumerate(scalar):
-            ax.add_patch(Rectangle(gridworld.state2point(s),1,1,facecolor=cmap((value-np.min(scalar))/(np.max(scalar)-np.min(scalar)))))
+        ax.pcolormesh(scalar)
+        # for s, value in enumerate(scalar):
+        #     ax.add_patch(Rectangle(gridworld.state2point(s),1,1,facecolor=cmap((value-np.min(scalar))/(np.max(scalar)-np.min(scalar)))))
     if policy is not None:
         for s, value in enumerate(policy):
             point = np.array(gridworld.state2point(s)) + 0.5

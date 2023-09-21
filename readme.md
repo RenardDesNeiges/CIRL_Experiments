@@ -28,11 +28,26 @@ The file structure is as follows:
 │   ├── gridworld.py        // gridworld environment
 │   └── utils.py            //utilities
 ├── examples        // ------------ figures --------------------
-│   └── example_IRL.png
+│   └── ....
 ├── notebooks       // ---- example jupyter notebooks ----------
-│   ├── irl_example.ipynb   // examples of IRL training
-│   └── pg_example.ipynb    // examples of PG training
+│   ├── bandirs_example.ipynb   // examples of bandit training
+│   ├── irl_example.ipynb       // examples of IRL training
+│   └── pg_example.ipynb        // examples of PG training
 │
 ├── readme.md               // this readme
+├── requirements.txt        // this readme
 └── run.py                  // experiments script
+└── plots.py                 // generate plots from logs
 ```
+
+The code is intended to be run with `python 3.9`. The dependencies are specified in the `requirements.txt` file which can be installed with pip.
+
+To run the experiments run:
+```shell
+python run.py # run the experiments
+python plots.py # generate the plots and save them to the examples folder
+```
+
+the example training curves look like this:
+
+![](examples/training_irl_curves.jpg)

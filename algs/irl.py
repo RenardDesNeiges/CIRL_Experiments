@@ -144,7 +144,6 @@ def irlL2Proj(r:float, t:float)->Callable:
     return proj
 
 
-
 """Projection operations"""
 def irlL1Proj(r:float, t:float)->Callable:
     def proj(x):

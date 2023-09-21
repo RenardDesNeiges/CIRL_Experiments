@@ -1,179 +1,84 @@
+
 import jax
-from jax import numpy as jnp
-from jax.numpy import linalg as jla
-import jax.nn as nn
 from jax.config import config; config.update("jax_enable_x64", True)
 
 import matplotlib.pyplot as plt
+import sys; sys.path.insert(1, '..')
 
-from env.gridworld import Gridworld,gridplot
-from algs.opt import Optimizer
-from algs.pg import *
-from algs.irl import *
-from algs.returns import J, IRLLagrangian
-from algs.utils import shannonEntropy
+import dill as pickle
 
+from algs.train import IRL_Trainer, TracePlotter
+from env.utils import ExampleMDPs
 from env.sample import Sampler
-    
-def main_pg():
-    key = jax.random.PRNGKey(0) 
-    
-    LR = 1e-2
-    CLIP_THRESH = 1e2
-    STEPS = 30
-    BATCH = 40
-    HORIZON = 20
-    BETA = 15
-    
-    """Defining an MDP"""
-    R = 100; P = -300; goals = [((2,0),R),((1,0),P),((1,1),P)]
-    gridMDP = Gridworld(3,3,0.1,0.9,goals=goals,obstacles=[]) 
-    gridMDP.init_distrib =  jnp.exp(jax.random.uniform(key,(gridMDP.n,))) / \
-        jnp.sum(jnp.exp(jax.random.uniform(key,(gridMDP.n,))))
-        
-    """Defining a sampler for the MDP"""
-    smp = Sampler(MDP=gridMDP,batchsize=BATCH,horizon=HORIZON,key=key)
+from algs.irl import irlL1Proj
+from algs.irl import initStateOnlyIRL, stochNaturalIRL
 
-    """Defining the relevant function"""
-    pFun = lambda p : nn.softmax(p,axis=1)  # policy function
-    rFun = lambda r : r                     # reward function
-    reg  = lambda p : - BETA * shannonEntropy(p)
-    
-    init = initDirectPG(key,gridMDP)                    # init function
-    # grad = stochNaturalPG(J,gridMDP,smp,pFun,rFun,reg)      # gradient function
-    grad = exactNaturalPG(J,gridMDP,pFun,rFun,reg)      # gradient function
-    proc = pgDefaultProcessor(LR,CLIP_THRESH)
-    
-    """Defining the logger"""
-    def logger( params, grads, step, i):
-        return {
-            'J'         : J(gridMDP,pFun(params['policy'])),
-            'params'    : params,
-            'grads'     : grads,
-            'step'      : step,
-            'iter'      : i
-        }
-            
-    """Optimizing"""
-    opt = Optimizer(init=init,grad=grad,proc=proc,log=logger,proj=lambda x: x)
-    op, log = opt.train(key,STEPS,True)
-    
-    """Plotting the results"""
-    i = [e['iter'] for e in log]
-    j = [e['J'] for e in log]
-    plt.plot(i,j)
-    plt.show()
-    
-    fig, ax = plt.subplots(1,1,figsize=(5,5))
-    gridplot(gridMDP,ax,goals=goals,stochastic_policy=pFun(op['policy']))
-    plt.show()
-    
-def getExpertPolicy(mdp,key,beta):
-    LR = 5e-3
-    CLIP_THRESH = 5e2
-    STEPS = 40
-    pFun = lambda p : nn.softmax(p,axis=1)  # policy function
-    rFun = lambda r : r                     # reward function
-    reg = lambda p : - beta * shannonEntropy(p)
-    
-    init = initDirectPG(key,mdp)                    # init function
-    grad = exactNaturalPG(J,mdp,pFun,rFun,reg)      # gradient function
-    proc = pgDefaultProcessor(LR,CLIP_THRESH)
-    
-    opt = Optimizer(init=init,grad=grad,proc=proc,log=lambda x,_g,_s,i : None,proj=lambda x: x)
-    p, _ = opt.train(key,STEPS,True)
-    return pFun(p['policy'])
-    
-def main_irl():
-    key = jax.random.PRNGKey(0) 
-    
-    PLR = 5e-3
-    RLR = 1e-2
-    CLIP_THRESH = 5e6
-    STEPS = 800
-    W_RADIUS = 1
-    BETA = 10
-    
-    """Defining an MDP"""
-    R = 100; P = -300; 
-    # goals = [((2,0),R),((1,0),P),((1,1),P)]
-    goals = [((2,0),R)]
-    gridMDP = Gridworld(3,3,0.1,0.9,goals=goals,obstacles=[]) 
-    gridMDP.init_distrib = jnp.exp(jax.random.uniform(key,(gridMDP.n,))) / \
-        jnp.sum(jnp.exp(jax.random.uniform(key,(gridMDP.n,))))
-        
-    """Recovering the expert policy (that we are going recover to clone)"""
-    print("Computing the expert's policy")
-    expertPolicy = getExpertPolicy(gridMDP,key,BETA)
-    L = IRLLagrangian(expertPolicy)
-    
-    """Defining the relevant function"""
-    pFun = lambda p : nn.softmax(p,axis=1)  # policy function
-    rFun = lambda r : r                     # reward function (for now we just parametrize directly)
-    reg = lambda p : -BETA * shannonEntropy(p)
+import jax.numpy as jnp
+from dataclasses import dataclass
 
-    init = initDirectIRL(key,gridMDP)                   # init function
-    grad = exactNaturalIRL(L,gridMDP,pFun,rFun,reg)     # gradient function 
-    proc = irlDefaultProcessor(PLR,RLR,CLIP_THRESH)        # gradient processing
-    proj = irlL2Proj(W_RADIUS)
+@dataclass
+class trainingParameters():
+    eg_plr :float = 1e-1
+    eg_rlr :float = 5e-2
+    mc_plr :float = 1e-1
+    mc_rlr :float = 5e-2
+    beta   :float = 0.1
+    tmax   :float = 70
+    batch  :int   = 10000
+    horizon:int   = 250
+    steps  :int   = 200
 
 
-    def policyReconstructionError(policy):
-        # TODO: create a metrics module
-        diff = policy-expertPolicy
-        return jnp.sum(jla.norm(diff,ord=1,axis=1))
+def run_exact_grads_irl(params,mdp,rFun,key):
+    trainer = IRL_Trainer(mdp,policy_lr=2,reward_lr=2e-1,beta=0.1)
+    trainer = IRL_Trainer(
+                        mdp,policy_lr=params.eg_plr,
+                        reward_lr=params.eg_rlr,
+                        beta=params.beta,
+                        init_params=initStateOnlyIRL,
+                        rFun=rFun,
+                        max_theta=params.tmax,
+                        proj=irlL1Proj,
+                        key = key)
+    
+    trainData = trainer.train(params.steps)
+    pickle.dump(trainData, open( "logs/exact_irl.pkl", "wb" ) )
+    
+def run_mc_grads_irl(params, mdp,rFun,key):
+    smp = Sampler(mdp,batchsize=1000,horizon=250)
+    trainer = IRL_Trainer(
+                        mdp,
+                        policy_lr=params.mc_plr,
+                        reward_lr=params.mc_rlr,
+                        beta=params.beta,
+                        init_params=initStateOnlyIRL,
+                        sampler=smp,
+                        rFun=rFun,
+                        gradients=stochNaturalIRL,
+                        max_theta=params.tmax,
+                        proj=irlL1Proj,
+                        key = key,
+                        )
+    trainData = trainer.train(params.steps)
+    pickle.dump(trainData, open( "logs/mc_irl.pkl", "wb" ) )
+    
+def main():    
+    key = jax.random.PRNGKey(0)
+    params = trainingParameters()
 
-    """Defining the logger"""
-    def logger( params, grads, step, i):
-        return {
-            'L'         : L(gridMDP,pFun(params['policy']),rFun(params['reward']),reg), 
-            'PRE'       : policyReconstructionError(pFun(params['policy'])),
-            'params'    : params,
-            'grads'     : grads,
-            'step'      : step,
-            'iter'      : i
-        }
-            
-    """Optimizing"""
-    opt = Optimizer(init=init,grad=grad,proc=proc,log=logger,proj=proj)
-    o, log = opt.train(key,STEPS,True)
+    # defining a state-only-reward gridworld MDP
+    mdp = ExampleMDPs.gworld1()
+    _m = mdp.m
+    def rFun(w):
+        return jnp.repeat(w,_m,1)
+    
+    w_ref = jnp.expand_dims(jnp.array([1 if s==2 else 0 for  s in range(9)]),1)
+    mdp.R = rFun(w_ref)
+    
+    print('running the exact gradient experiment')
+    run_exact_grads_irl(params, mdp,rFun,key)
+    print('running the stochastic gradient experiment')
+    run_mc_grads_irl(params, mdp,rFun,key)
 
-    ls = [e['L'] for e in log]
-    pre = [e['PRE'] for e in log]
-    fig, ax = plt.subplots(1,2,figsize=(10,5))
-    ax[0].plot(ls)
-    ax[0].set_title('L')
-    ax[1].plot(pre)
-    ax[1].set_title('PRE')
-    fig.tight_layout()
-    plt.show()
-    
-    fig, ax = plt.subplots(2,3,figsize=(15,10))
-    
-    gridplot(gridMDP,ax[0,0],stochastic_policy=expertPolicy,goals=goals)
-    ax[0,0].set_title('expert')
-    gridplot(gridMDP,ax[0,1],stochastic_policy=pFun(init()['policy']),goals=goals)
-    ax[0,1].set_title('IRL pre-training')
-    gridplot(gridMDP,ax[0,2],stochastic_policy=pFun(o['policy']),goals=goals)
-    ax[0,2].set_title('IRL post-training')
-    
-    ax[1,0].set_title('expert')
-    gridplot(gridMDP,ax[1,0],scalar=jnp.sum(gridMDP.R,axis=1))
-    ax[1,1].set_title('IRL pre-training')
-    gridplot(gridMDP,ax[1,1],scalar=jnp.sum(rFun(log[0]['params']['reward']),axis=1))
-    ax[1,2].set_title('IRL post-training')
-    gridplot(gridMDP,ax[1,2],scalar=jnp.sum(rFun(log[-1]['params']['reward']),axis=1))
-    
-    fig.tight_layout()
-    plt.show()
-    
-    
-    
-    print(log)
-    
 if __name__ == "__main__":
-    main_irl()
-
-# fig,ax = plt.subplots(1,1,figsize=(5,5))
-# gridplot(gridMDP,ax,goals=goals,stochastic_policy=expertPolicy)
-# plt.show()
+    main()

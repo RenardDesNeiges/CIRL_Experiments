@@ -1,0 +1,4 @@
+dill==0.3.7
+jax==0.3.25
+matplotlib==3.6.2
+tqdm==4.65.0

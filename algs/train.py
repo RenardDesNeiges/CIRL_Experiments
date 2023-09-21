@@ -19,6 +19,8 @@ from algs.metrics import policyReconstructionError, normalizedRewardError
 from algs.opt import Optimizer
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
 
 # TODO : replace this with the PG trainer maybe
 def getExpertPolicy(    key:jax.random.KeyArray,
@@ -37,7 +39,19 @@ def getExpertPolicy(    key:jax.random.KeyArray,
     p, _ = opt.train(key,STEPS,True)
     return pFun(p['policy'])
 
-class PG_Trainer():
+class Trainer():
+    def __init__(self) -> None:
+        pass
+
+
+@dataclass
+class trainingData():
+    trace: List[Dict[str,Any]] = None
+    optimizer: Dict[str,Any] = None
+    trainer: Trainer = None
+
+
+class PG_Trainer(Trainer):
     def __init__(self,  mdp: MarkovDecisionProcess, 
                         policy_lr:float = 2,
                         clip_thresh:float = 5e2,
@@ -107,7 +121,7 @@ class PG_Trainer():
         self.sampler = sampler
         self.proj = proj
 
-    def train(self, stepcount:int, pbar: bool = True)->Tuple[Dict[str,Any],List[Dict[str,Any]]]:
+    def train(self, stepcount:int, pbar: bool = True)->trainingData:
         """Training method.
 
         Args:
@@ -151,10 +165,13 @@ class PG_Trainer():
         opt = Optimizer(init=init,grad=grad,proc=proc,log=logger,proj=proj)
         optimizers, trace = opt.train(self.key,stepcount,pbar)
         
-        return optimizers, trace
+        _trainer = type(self).__new__(type(self))
+        _trainer.__dict__.update(self.__dict__)
+        
+        return trainingData(trace,optimizers,_trainer)
 
 
-class IRL_Trainer():
+class IRL_Trainer(Trainer):
     def __init__(self,  mdp: MarkovDecisionProcess, 
                         policy_lr:float = 2,
                         reward_lr:float = 1,
@@ -238,7 +255,7 @@ class IRL_Trainer():
         self.sampler = sampler
         self.proj = proj
 
-    def train(self, stepcount:int, pbar: bool = True)->Tuple[Dict[str,Any],List[Dict[str,Any]]]:
+    def train(self, stepcount:int, pbar: bool = True)->trainingData:
         """Training method.
 
         Args:
@@ -304,7 +321,10 @@ class IRL_Trainer():
         opt = Optimizer(init=init,grad=grad,proc=proc,log=logger,proj=proj)
         optimizers, trace = opt.train(self.key,stepcount,pbar)
         
-        return optimizers, trace
+        _trainer = type(self).__new__(type(self))
+        _trainer.__dict__.update(self.__dict__)
+        
+        return trainingData(trace,optimizers,_trainer)
     
 class TracePlotter(ABC):
     @abstractmethod
@@ -347,26 +367,28 @@ class TracePlotter(ABC):
                 trainer.pFun(trace[-1]['params']['policy'])
                 ,goals=trainer.mdp.goals); ax[0,2].set_title('Learned IRL Policy')
         gridplot(   trainer.mdp,ax[1,0],
-                    scalar=jnp.sum(trainer.mdp.R,axis=1),
+                    scalar=jnp.reshape(jnp.sum(trainer.mdp.R,axis=1),(trainer.mdp.grid_width,trainer.mdp.grid_height)),
                     goals=trainer.mdp.goals); ax[1,0].set_title('Expert reward')
         gridplot(trainer.mdp,ax[1,1],
-                scalar=jnp.sum(trainer.rFun(trace[0]['params']['reward']),axis=1),
+                scalar=jnp.reshape(jnp.sum(trainer.rFun(trace[0]['params']['reward']),axis=1),(trainer.mdp.grid_width,trainer.mdp.grid_height)),
                 goals=trainer.mdp.goals); ax[1,1].set_title('Pre training reward')
         gridplot(trainer.mdp,ax[1,2],
-                scalar=jnp.sum(trainer.rFun(trace[-1]['params']['reward']),axis=1),
+                scalar=jnp.reshape(jnp.sum(trainer.rFun(trace[-1]['params']['reward']),axis=1),(trainer.mdp.grid_width,trainer.mdp.grid_height)),
                 goals=trainer.mdp.goals); ax[1,2].set_title('Learned reward')
 
         fig.tight_layout()
         return fig, ax  
     
     @abstractmethod
-    def scalarPlotArray(keys,trainer,opt,trace,fsize,titles=None):
+    def scalarPlotArray(keys,trainer,opt,trace,fsize,titles=None,fig_ax=None):
         if type(keys[0]) == str:
             c = len(keys); r = 1
         else:
             c = len(keys[0]); r = len(keys)
-        fig, ax = plt.subplots(r,c,figsize=fsize)
-        
+        if fig_ax is None:
+            fig, ax = plt.subplots(r,c,figsize=fsize)
+        else:
+            fig, ax = fig_ax
         for i in range(c):
             for j in range(r):
                 
