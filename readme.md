@@ -51,6 +51,3 @@ python plots.py # generate the plots and save them to the examples folder
 the example training curves look like this:
 
 ![](examples/training_irl_curves.jpg)
-
-
-This is a test to show Tingting.
